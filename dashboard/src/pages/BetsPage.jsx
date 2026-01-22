@@ -37,8 +37,17 @@ function BetsPage() {
     console.log('Starting to load bets...')
     const startTime = Date.now()
     
+    // Safety timeout - force stop loading after 5 seconds no matter what
+    const safetyTimeout = setTimeout(() => {
+      console.error('SAFETY TIMEOUT: Force stopping load after 5 seconds')
+      setLoading(false)
+      setBets([])
+    }, 5000)
+    
     try {
       const data = await getLatestBets()
+      clearTimeout(safetyTimeout)
+      
       const loadTime = Date.now() - startTime
       console.log(`Bets loaded in ${loadTime}ms`)
       
@@ -50,6 +59,7 @@ function BetsPage() {
         setBets([])
       }
     } catch (error) {
+      clearTimeout(safetyTimeout)
       const loadTime = Date.now() - startTime
       console.error(`Error loading bets after ${loadTime}ms:`, error)
       setBets([])
