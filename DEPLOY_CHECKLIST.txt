@@ -1,0 +1,67 @@
+═══════════════════════════════════════════════════════════════
+  NBA BETTING DASHBOARD - DEPLOYMENT CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+BEFORE YOU START:
+  □ Decide on GitHub repository name (e.g., "NBABetv1")
+  □ Have Neon database connection string ready
+
+STEP 1: UPDATE BASE PATH (CRITICAL!)
+  □ Edit: dashboard/vite.config.js
+  □ Change: base: '/NBABetv1/' → base: '/YOUR_REPO_NAME/'
+  □ Save file
+
+STEP 2: CREATE GITHUB REPOSITORY
+  □ Go to: https://github.com/new
+  □ Repository name: _______________________
+  □ Don't check README/gitignore/license
+  □ Create repository
+
+STEP 3: PUSH CODE TO GITHUB
+  □ Open PowerShell in project folder
+  □ Run:
+    git init
+    git add .
+    git commit -m "Initial commit"
+    git branch -M main
+    git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+    git push -u origin main
+
+STEP 4: ADD DATABASE SECRET
+  □ GitHub → Settings → Secrets and variables → Actions
+  □ New repository secret
+  □ Name: DB_CONNECTION_STRING
+  □ Value: [Your Neon connection string]
+  □ Add secret
+
+STEP 5: CREATE DATABASE TABLES
+  □ Connect to Neon database
+  □ Run: database_schema.sql
+  □ Verify tables created (processed_props, bet_tracking)
+
+STEP 6: ENABLE GITHUB PAGES
+  □ GitHub → Settings → Pages
+  □ Source: GitHub Actions
+  □ Save
+
+STEP 7: TRIGGER FIRST DEPLOYMENT
+  □ GitHub → Actions tab
+  □ Click: Daily Bet Update
+  □ Click: Run workflow → Run workflow
+  □ Wait 5-10 minutes
+
+STEP 8: ACCESS DASHBOARD
+  □ URL: https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
+  □ Verify it loads correctly
+  □ Check browser console for errors
+
+POST-DEPLOYMENT:
+  □ Change admin password (dashboard/src/pages/BetsPage.jsx, app.js)
+  □ Test filters and sorting
+  □ Verify performance page (should be empty initially)
+  □ Test admin reload button (?admin=true)
+
+═══════════════════════════════════════════════════════════════
+  AUTOMATIC UPDATES: Daily at 8 AM EST
+  MANUAL UPDATES: Actions → Daily Bet Update → Run workflow
+═══════════════════════════════════════════════════════════════
