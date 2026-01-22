@@ -35,12 +35,24 @@ function BetsPage() {
   const loadBets = async () => {
     setLoading(true)
     try {
-      const data = await getLatestBets()
-      setBets(data)
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      )
+      
+      const dataPromise = getLatestBets()
+      const data = await Promise.race([dataPromise, timeoutPromise])
+      
+      if (Array.isArray(data)) {
+        setBets(data)
+        console.log(`Loaded ${data.length} bets`)
+      } else {
+        console.warn('Invalid data format:', data)
+        setBets([])
+      }
     } catch (error) {
       console.error('Error loading bets:', error)
-      alert('Error loading bets. Using sample data.')
-      // Fallback to sample data for development
+      // Don't show alert, just log and set empty array
       setBets([])
     } finally {
       setLoading(false)
