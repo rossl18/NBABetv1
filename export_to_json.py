@@ -69,8 +69,12 @@ def export_for_dashboard():
                     print("  (This is normal if no games have occurred yet)")
                     import traceback
                     traceback.print_exc()
+                    # Still create empty performance.json file
+                    export_performance_json()
             else:
                 print("⚠ Skipping outcome tracking (no connection string)")
+                # Still create empty performance.json file
+                export_performance_json()
             
             # Export to JSON for static site
             # Convert DataFrame to list of dicts
@@ -100,6 +104,28 @@ def export_for_dashboard():
             with open(output_path, 'w') as f:
                 json.dump([], f, indent=2)
             print(f"✓ Created empty JSON file at {output_path}")
+            
+            # Always create performance.json file, even if empty
+            try:
+                export_performance_json()
+            except Exception as e:
+                print(f"⚠ Warning: Could not export performance JSON: {e}")
+                # Create empty performance.json manually
+                perf_path = 'dashboard/public/data/performance.json'
+                empty_perf = {
+                    "totalBets": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "winRate": 0,
+                    "totalProfit": 0,
+                    "roi": 0,
+                    "byProp": [],
+                    "overTime": []
+                }
+                with open(perf_path, 'w') as f:
+                    json.dump(empty_perf, f, indent=2)
+                print(f"✓ Created empty performance.json file")
+            
             return None
             
     except Exception as e:
