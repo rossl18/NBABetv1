@@ -6,8 +6,14 @@ import Navbar from './components/Navbar'
 import './App.css'
 
 function App() {
+  // Use basename only in production (GitHub Pages), not in local dev
+  const basename = import.meta.env.PROD ? '/NBABetv1' : '/'
+  
+  console.log('App rendering, basename:', basename)
+  console.log('Environment:', import.meta.env.MODE)
+  
   return (
-    <BrowserRouter basename="/NBABetv1">
+    <BrowserRouter basename={basename}>
       <div className="app">
         <Navbar />
         <Routes>

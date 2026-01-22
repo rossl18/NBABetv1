@@ -5,10 +5,11 @@
 }
 
 .container {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e7eb;
 }
 
 .page-header {
@@ -19,9 +20,12 @@
 }
 
 .page-header h1 {
-  color: #333;
-  font-size: 2.5rem;
+  color: #111827;
+  font-size: 2.25rem;
   margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .props-count {
@@ -66,19 +70,28 @@
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: #ffffff;
   padding: 1.5rem;
-  border-radius: 15px;
+  border-radius: 12px;
   text-align: center;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .stat-card.positive {
-  background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+  background: #ffffff;
+  border-left: 4px solid #10b981;
 }
 
 .stat-card.high-value {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: #ffffff;
+  border-left: 4px solid #f59e0b;
 }
 
 .stat-value {
@@ -98,9 +111,11 @@
   display: flex;
   gap: 2rem;
   margin-bottom: 2rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 10px;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filter-group,
@@ -118,12 +133,27 @@
 
 .filter-group select,
 .sort-group select {
-  padding: 0.5rem 1rem;
-  border: 2px solid #ddd;
+  padding: 0.625rem 1rem;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   background: white;
   cursor: pointer;
+  transition: all 0.2s;
+  color: #111827;
+  font-weight: 500;
+}
+
+.filter-group select:hover,
+.sort-group select:hover {
+  border-color: #9ca3af;
+}
+
+.filter-group select:focus,
+.sort-group select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .bets-grid {

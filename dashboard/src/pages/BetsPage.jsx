@@ -119,7 +119,16 @@ function BetsPage() {
   })
 
   const sortedBets = [...filteredBets].sort((a, b) => {
-    if (sortBy === 'ev') return (b.expected_value || 0) - (a.expected_value || 0)
+    if (sortBy === 'ev') {
+      // Use Kelly-adjusted EV if available (from backend), otherwise use raw EV
+      const aScore = (a.kelly_adjusted_ev !== undefined) 
+        ? (a.kelly_adjusted_ev || 0) 
+        : ((a.expected_value || 0) * (a.kelly_fraction || 0))
+      const bScore = (b.kelly_adjusted_ev !== undefined)
+        ? (b.kelly_adjusted_ev || 0)
+        : ((b.expected_value || 0) * (b.kelly_fraction || 0))
+      return bScore - aScore
+    }
     if (sortBy === 'confidence') return (b.confidence_score || 0) - (a.confidence_score || 0)
     if (sortBy === 'kelly') return (b.kelly_fraction || 0) - (a.kelly_fraction || 0)
     return 0
@@ -208,7 +217,7 @@ function BetsPage() {
           <div className="sort-group">
             <label>Sort By:</label>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="ev">Expected Value</option>
+              <option value="ev">EV (Risk-Adjusted)</option>
               <option value="confidence">Confidence Score</option>
               <option value="kelly">Kelly Fraction</option>
             </select>

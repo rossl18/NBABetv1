@@ -3,7 +3,7 @@ Save processed props to Neon database for dashboard access
 """
 import pandas as pd
 from database import get_db_connection
-from datetime import datetime
+from datetime import datetime, date
 
 def save_props_to_database(df: pd.DataFrame, table_name: str = 'processed_props'):
     """
@@ -56,8 +56,8 @@ def save_props_to_database(df: pd.DataFrame, table_name: str = 'processed_props'
                     record[db_col] = value
             insert_data.append(record)
         
-        # Build insert query
-        columns = list(column_mapping.values())
+        # Build insert query - add game_date column
+        columns = list(column_mapping.values()) + ['game_date']
         placeholders = ', '.join(['%s'] * len(columns))
         # Note: ON CONFLICT requires a unique constraint
         # For now, we'll just insert (you may want to add unique constraint on player+prop+line+generated_at)
@@ -69,7 +69,10 @@ def save_props_to_database(df: pd.DataFrame, table_name: str = 'processed_props'
         # Execute insertions
         cursor = conn.cursor()
         for record in insert_data:
-            values = [record.get(col) for col in columns]
+            values = [record.get(col) for col in column_mapping.values()]
+            # Set game_date to today (assuming props are for today's games)
+            # This allows tracking to work even if game dates aren't extracted from API
+            values.append(date.today())
             cursor.execute(query, values)
         
         conn.commit()

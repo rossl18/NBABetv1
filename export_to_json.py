@@ -19,12 +19,16 @@ def export_for_dashboard():
         print("=" * 60)
         
         # Check for database connection string
+        # Note: database.py has a fallback connection string, so we'll always try to connect
         db_conn = os.getenv('DB_CONNECTION_STRING')
         if not db_conn:
-            print("⚠ Warning: DB_CONNECTION_STRING environment variable not set")
-            print("  Database operations will be skipped")
+            print("⚠ Note: DB_CONNECTION_STRING environment variable not set")
+            print("  Using fallback connection string from database.py")
         else:
-            print("✓ Database connection string found")
+            print("✓ Database connection string found in environment")
+        
+        # Always attempt database operations (database.py has fallback connection string)
+        db_conn = True  # Set to True to enable database operations
         
         print("\n[Step 1/3] Generating betting dataset...")
         try:
@@ -59,8 +63,12 @@ def export_for_dashboard():
             print("\n[Step 3/3] Tracking outcomes and generating performance metrics...")
             if db_conn:
                 try:
-                    # Process props from today that have already occurred
-                    process_past_props(start_date=date.today())
+                    # Process props generated yesterday (to verify yesterday's predictions)
+                    # This will find props with generated_at = yesterday and track their outcomes
+                    from datetime import timedelta
+                    yesterday = date.today() - timedelta(days=1)
+                    print(f"Tracking outcomes for props generated on {yesterday}...")
+                    process_past_props(start_date=yesterday)
                     # Export performance JSON
                     export_performance_json()
                     print("✓ Performance metrics updated")

@@ -187,8 +187,22 @@ def generate_betting_dataset(filter_overs_only: bool = True,
     final_df['Generated_At'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # Step 4: Sort by expected value (best bets first)
-    print(f"\n[Step 4/4] Sorting by expected value...")
-    final_df = final_df.sort_values('Expected_Value', ascending=False, na_position='last')
+    # Use Kelly-adjusted EV to avoid bias toward high-odds bets
+    # This normalizes for risk and gives fair comparison across odds ranges
+    print(f"\n[Step 4/4] Sorting by Kelly-adjusted expected value...")
+    
+    # Calculate Kelly-adjusted score with stronger penalty for high-variance bets
+    # Formula: EV * (Kelly_Fraction^1.5) - this penalizes high-odds bets more aggressively
+    # The exponent > 1 means bets with lower Kelly fractions (higher variance) get penalized more
+    kelly_clipped = final_df['Kelly_Fraction'].clip(lower=0, upper=1)
+    final_df['Kelly_Adjusted_EV'] = final_df['Expected_Value'] * (kelly_clipped ** 1.5)
+    
+    # Sort by Kelly-adjusted EV, then by raw EV as tiebreaker
+    final_df = final_df.sort_values(
+        ['Kelly_Adjusted_EV', 'Expected_Value'], 
+        ascending=[False, False], 
+        na_position='last'
+    )
     
     # Add some summary statistics
     print("\n" + "="*60)

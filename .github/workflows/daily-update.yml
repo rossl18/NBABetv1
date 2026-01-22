@@ -52,6 +52,9 @@ jobs:
     - name: Build dashboard
       working-directory: ./dashboard
       run: npm run build
+      env:
+        # Ensure data files are available during build
+        NODE_ENV: production
     
     - name: Setup Pages
       uses: actions/configure-pages@v4

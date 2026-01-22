@@ -46,13 +46,129 @@ def find_stat_column(df: pd.DataFrame, prop_type: str) -> Optional[str]:
             return matching_cols[0]
     return None
 
-def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Optional[float]:
+def get_actual_stat_from_api(player_name: str, prop_type: str, game_date: date) -> Optional[float]:
     """
-    Query historical database to get the actual stat value for a player on a specific game date
+    Query NBA API using nba_api package to get actual stat value for a player on a specific game date
+    This is used for current season games not in the training dataset
     
     Returns:
         Actual stat value, or None if not found
     """
+    try:
+        from nba_api.stats.endpoints import playergamelog
+        from nba_api.stats.static import players
+        import time
+        
+        # Find player ID by name using nba_api static players list
+        all_players = players.get_players()
+        
+        # Try to find matching player
+        player_id = None
+        matched_name = None
+        
+        # First try exact match
+        for player in all_players:
+            full_name = f"{player['first_name']} {player['last_name']}"
+            if full_name.lower() == player_name.lower():
+                player_id = player['id']
+                matched_name = full_name
+                break
+        
+        # If no exact match, try partial match (handle cases like "Jaren Jackson Jr.")
+        if not player_id:
+            for player in all_players:
+                full_name = f"{player['first_name']} {player['last_name']}"
+                # Handle special cases like "Jaren Jackson Jr." vs "Jaren Jackson"
+                name_normalized = player_name.replace('.', '').replace(' ', '').lower()
+                full_name_normalized = full_name.replace('.', '').replace(' ', '').lower()
+                if (player_name.lower() in full_name.lower() or 
+                    full_name.lower() in player_name.lower() or
+                    name_normalized == full_name_normalized):
+                    player_id = player['id']
+                    matched_name = full_name
+                    break
+        
+        if not player_id:
+            print(f"  API: Could not match '{player_name}' to any player")
+            return None
+        
+        print(f"  API: Matched '{player_name}' to '{matched_name}' (ID: {player_id})")
+        
+        # Get player game log for the season
+        # Determine season string (e.g., "2025-26" for 2026-01-21)
+        year = game_date.year
+        month = game_date.month
+        if month >= 10:  # Season starts in October
+            season = f"{year}-{str(year+1)[-2:]}"
+        else:
+            season = f"{year-1}-{str(year)[-2:]}"
+        
+        print(f"  API: Fetching game log for season {season}, date {game_date}")
+        
+        # Get game log for the player
+        game_log = playergamelog.PlayerGameLog(
+            player_id=player_id,
+            season=season
+        )
+        
+        # Small delay to avoid rate limiting
+        time.sleep(0.6)
+        
+        df = game_log.get_data_frames()[0]
+        
+        if len(df) == 0:
+            print(f"  API: No games found for {matched_name} in season {season}")
+            return None
+        
+        # Filter to the specific date
+        # nba_api returns dates in format "MMM DD, YYYY" (e.g., "Jan 21, 2026")
+        df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'], format='%b %d, %Y', errors='coerce')
+        game_row = df[df['GAME_DATE'].dt.date == game_date]
+        
+        if len(game_row) == 0:
+            print(f"  API: No game found for {matched_name} on {game_date}")
+            return None
+        
+        # Map prop types to stat columns in nba_api
+        prop_to_stat_field = {
+            'Points': 'PTS',
+            'Rebounds': 'REB',
+            'Assists': 'AST',
+            'Threes': 'FG3M',  # 3-pointers made
+            'Made Threes': 'FG3M',
+            'Steals': 'STL',
+            'Blocks': 'BLK'
+        }
+        
+        stat_field = prop_to_stat_field.get(prop_type)
+        if stat_field and stat_field in game_row.columns:
+            value = float(game_row[stat_field].iloc[0])
+            print(f"  API: Found {prop_type} = {value} for {matched_name} on {game_date}")
+            return value
+        else:
+            print(f"  API: Stat field '{stat_field}' not found in response for {prop_type}")
+            return None
+        
+    except ImportError:
+        print(f"  API: nba_api package not installed. Install with: pip install nba-api")
+        return None
+    except Exception as e:
+        print(f"  API Error for {player_name} on {game_date}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Optional[float]:
+    """
+    Get the actual stat value for a player on a specific game date
+    First checks the historical training dataset, then falls back to NBA API for current season
+    
+    Returns:
+        Actual stat value, or None if not found
+    """
+    print(f"  [get_actual_stat] Looking up {player_name} - {prop_type} on {game_date}")
+    
+    # First, try the historical training dataset
     conn = get_db_connection()
     try:
         query = """
@@ -63,21 +179,31 @@ def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Option
         """
         df = pd.read_sql_query(query, conn, params=[player_name, game_date])
         
-        if len(df) == 0:
-            return None
-        
-        # Find the stat column
-        stat_column = find_stat_column(df, prop_type)
-        if stat_column and stat_column in df.columns:
-            return float(df[stat_column].iloc[0])
-        else:
-            print(f"Warning: Could not find stat column for {prop_type} in player data")
-            return None
+        if len(df) > 0:
+            # Found in training dataset
+            print(f"  [get_actual_stat] Found in training dataset")
+            stat_column = find_stat_column(df, prop_type)
+            if stat_column and stat_column in df.columns:
+                return float(df[stat_column].iloc[0])
     except Exception as e:
-        print(f"Error querying actual stat: {e}")
-        return None
+        print(f"  [get_actual_stat] Error querying training dataset: {e}")
     finally:
         conn.close()
+    
+    # If not found in training dataset, try NBA API (for current season games)
+    # Only try API if the date is recent (within last 2 years)
+    from datetime import timedelta
+    two_years_ago = date.today() - timedelta(days=730)
+    print(f"  [get_actual_stat] Not in training dataset. Date check: {game_date} >= {two_years_ago} = {game_date >= two_years_ago}")
+    if game_date >= two_years_ago:
+        print(f"  [get_actual_stat] Trying NBA API for {player_name} on {game_date}...")
+        result = get_actual_stat_from_api(player_name, prop_type, game_date)
+        print(f"  [get_actual_stat] API returned: {result}")
+        return result
+    else:
+        print(f"  [get_actual_stat] Date {game_date} is too old for API lookup")
+    
+    return None
 
 def determine_outcome(actual_stat: float, line: float, over_under: str) -> bool:
     """
@@ -203,20 +329,24 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
         
         today = date.today()
         
-        # Get props with game_date on or after start_date that are in the past
-        # and haven't been tracked yet
+        # Get props that were GENERATED on start_date (yesterday), not today
+        # We want to track outcomes for props that were generated yesterday to verify their predictions
+        # Use generated_at date to find props from yesterday, then use that date to look up actual stats
         query = """
-        SELECT pp.id, pp.player, pp.prop, pp.line, pp.over_under, pp.odds, pp.game_date
+        SELECT pp.id, pp.player, pp.prop, pp.line, pp.over_under, pp.odds, 
+               DATE(pp.generated_at) as generated_date,
+               DATE(pp.generated_at) as game_date
         FROM processed_props pp
         LEFT JOIN bet_tracking bt ON pp.id = bt.prop_id
-        WHERE pp.game_date IS NOT NULL
-        AND pp.game_date >= %s
-        AND pp.game_date <= %s
+        WHERE DATE(pp.generated_at) = %s
         AND (bt.outcome IS NULL OR bt.id IS NULL)
-        ORDER BY pp.game_date DESC
+        ORDER BY DATE(pp.generated_at) DESC
         """
         
-        df = pd.read_sql_query(query, conn, params=[start_date, today])
+        # Only look for props generated on start_date (yesterday), not today
+        # This ensures we're tracking yesterday's predictions and verifying them against yesterday's actual stats
+        print(f"Looking for props generated on {start_date} (yesterday)...")
+        df = pd.read_sql_query(query, conn, params=[start_date])
         
         print(f"Found {len(df)} props to process")
         
@@ -233,10 +363,11 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
             game_date = row['game_date']
             
             # Get actual stat
+            print(f"Looking up: {player} - {prop} on {game_date}")
             actual_stat = get_actual_stat(player, prop, game_date)
             
             if actual_stat is None:
-                print(f"Could not find actual stat for {player} - {prop} on {game_date}")
+                print(f"❌ Could not find actual stat for {player} - {prop} on {game_date}")
                 not_found += 1
                 continue
             

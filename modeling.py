@@ -154,7 +154,11 @@ class PropPredictor:
         X_scaled = self.scaler.transform(X)
         proba = self.model.predict_proba(X_scaled)[0, 1]
         
-        return float(proba)
+        # Apply probability calibration to prevent extreme values and account for model uncertainty
+        # Use sigmoid-like compression to pull probabilities away from 0 and 1
+        calibrated_proba = self._calibrate_probability(proba)
+        
+        return float(calibrated_proba)
     
     def predict_probability_with_ci(self, X: pd.DataFrame, confidence: float = 0.95) -> tuple:
         """
@@ -204,17 +208,27 @@ class PropPredictor:
             mean_proba = np.mean(tree_probas)
             std_proba = np.std(tree_probas)
             
+            # Apply calibration to mean probability
+            calibrated_mean = self._calibrate_probability(mean_proba)
+            
             # Calculate confidence interval using normal approximation
             # For 95% CI, z = 1.96
             z_score = 1.96 if confidence == 0.95 else 2.576 if confidence == 0.99 else 1.645
             
+            # Calibrate bounds as well, but keep them wider to account for uncertainty
             lower = max(0.0, mean_proba - z_score * std_proba)
             upper = min(1.0, mean_proba + z_score * std_proba)
+            calibrated_lower = self._calibrate_probability(lower)
+            calibrated_upper = self._calibrate_probability(upper)
             
-            return float(mean_proba), float(lower), float(upper)
+            return float(calibrated_mean), float(calibrated_lower), float(calibrated_upper)
         else:
             # Fallback: use single prediction with estimated uncertainty
             proba = self.model.predict_proba(X_scaled)[0, 1]
+            
+            # Apply calibration
+            calibrated_proba = self._calibrate_probability(proba)
+            
             # Estimate uncertainty based on training sample size
             # Rough approximation: larger sample = smaller uncertainty
             if hasattr(self, 'training_samples'):
@@ -228,7 +242,36 @@ class PropPredictor:
             lower = max(0.0, proba - z_score * se)
             upper = min(1.0, proba + z_score * se)
             
-            return float(proba), float(lower), float(upper)
+            # Calibrate bounds
+            calibrated_lower = self._calibrate_probability(lower)
+            calibrated_upper = self._calibrate_probability(upper)
+            
+            return float(calibrated_proba), float(calibrated_lower), float(calibrated_upper)
+    
+    def _calibrate_probability(self, prob: float, compression_factor: float = 0.03) -> float:
+        """
+        Calibrate probability to prevent extreme values (0% or 100%)
+        and account for model uncertainty/noise.
+        
+        Uses a sigmoid-like compression that pulls probabilities away from extremes.
+        compression_factor: How much to compress (0.03 = 3% compression from edges)
+        
+        Args:
+            prob: Raw probability (0-1)
+            compression_factor: Amount to compress from edges (default 0.03 = 3%)
+        
+        Returns:
+            Calibrated probability (compression_factor to 1-compression_factor range)
+        """
+        # Clamp to valid range first
+        prob = max(0.0, min(1.0, prob))
+        
+        # Apply compression: map [0,1] to [compression_factor, 1-compression_factor]
+        # This prevents 0% and 100% predictions while keeping most of the signal
+        # 3% compression means 97% max probability, which is more realistic
+        calibrated = compression_factor + prob * (1 - 2 * compression_factor)
+        
+        return calibrated
     
     def predict_from_historical(self, historical_df: pd.DataFrame, prop_type: str, feature_prep_func, line: float = None) -> float:
         """
