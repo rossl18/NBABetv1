@@ -39,10 +39,43 @@ export const reloadBets = async () => {
 export const getPerformanceData = async () => {
   try {
     const response = await fetch('/NBABetv1/data/performance.json')
-    if (!response.ok) throw new Error('Failed to fetch')
-    return response.json()
+    if (!response.ok) {
+      // Return empty structure if file doesn't exist or fails to load
+      return {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        totalProfit: 0,
+        roi: 0,
+        byProp: [],
+        overTime: []
+      }
+    }
+    const data = await response.json()
+    // Ensure we always return a valid structure
+    return data || {
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      winRate: 0,
+      totalProfit: 0,
+      roi: 0,
+      byProp: [],
+      overTime: []
+    }
   } catch (error) {
     console.error('Error fetching performance:', error)
-    return null
+    // Return empty structure instead of null
+    return {
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      winRate: 0,
+      totalProfit: 0,
+      roi: 0,
+      byProp: [],
+      overTime: []
+    }
   }
 }

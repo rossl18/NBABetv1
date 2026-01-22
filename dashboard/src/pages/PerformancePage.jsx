@@ -16,15 +16,30 @@ function PerformancePage() {
     setLoading(true)
     try {
       const performanceData = await getPerformanceData()
-      // Only set data if it has actual bets (totalBets > 0)
-      if (performanceData && performanceData.totalBets > 0) {
-        setData(performanceData)
-      } else {
-        setData(null) // Show empty state
-      }
+      // Always set data, even if empty - ensures page is always accessible
+      setData(performanceData || {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        totalProfit: 0,
+        roi: 0,
+        byProp: [],
+        overTime: []
+      })
     } catch (error) {
       console.error('Error loading performance:', error)
-      setData(null) // Show empty state instead of sample data
+      // Set empty structure instead of null to ensure page is accessible
+      setData({
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        totalProfit: 0,
+        roi: 0,
+        byProp: [],
+        overTime: []
+      })
     } finally {
       setLoading(false)
     }
@@ -34,14 +49,41 @@ function PerformancePage() {
     return <LoadingSpinner />
   }
 
+  // Always render the page, show empty state if no data
   if (!data || data.totalBets === 0) {
     return (
       <div className="performance-page">
         <div className="container">
           <h1>Model Performance</h1>
-          <div style={{ textAlign: 'center', padding: '3rem', color: '#666' }}>
-            <p style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>No performance data available yet.</p>
-            <p>Performance tracking will appear here once predictions have been made and outcomes have been recorded.</p>
+          <div className="empty-state">
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: '#666' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.3 }}>📊</div>
+              <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#333' }}>
+                No Performance Data Yet
+              </h2>
+              <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem', lineHeight: '1.6' }}>
+                Performance tracking will appear here once:
+              </p>
+              <ul style={{ 
+                textAlign: 'left', 
+                display: 'inline-block', 
+                marginTop: '1rem',
+                fontSize: '1rem',
+                lineHeight: '1.8'
+              }}>
+                <li>Predictions have been generated</li>
+                <li>Games have been played</li>
+                <li>Outcomes have been recorded</li>
+              </ul>
+              <p style={{ 
+                marginTop: '2rem', 
+                fontSize: '0.9rem', 
+                color: '#999',
+                fontStyle: 'italic'
+              }}>
+                Check back after tonight's games!
+              </p>
+            </div>
           </div>
         </div>
       </div>
