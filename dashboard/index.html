@@ -1,75 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NBA Betting Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="navbar-container">
-            <div class="navbar-brand">NBA Betting Dashboard</div>
-            <div class="navbar-links">
-                <a href="index.html" class="active">Best Bets</a>
-                <a href="performance.html">Performance</a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="bets-page">
-        <div class="container">
-            <div class="page-header">
-                <div>
-                    <h1>Best Bets</h1>
-                    <p class="props-count" id="propsCount">Loading...</p>
-                </div>
-                <button class="reload-btn admin-only" id="reloadBtn" onclick="reloadBets()" title="Admin only - requires password" style="display: none;">🔄 Reload Bets</button>
-            </div>
-
-            <div class="stats-grid" id="statsGrid">
-                <!-- Stats will be populated by JavaScript -->
-            </div>
-
-            <div class="controls">
-                <div class="filter-group">
-                    <label>EV Filter:</label>
-                    <select id="filterSelect" onchange="applyFilters()">
-                        <option value="all">All Bets</option>
-                        <option value="positive">Positive EV Only</option>
-                        <option value="high-value">High Value (10%+)</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Player Type:</label>
-                    <select id="allStarSelect" onchange="applyFilters()">
-                        <option value="all">All Players</option>
-                        <option value="all-star">All-Stars Only</option>
-                        <option value="non-all-star">Non-All-Stars</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Prop Type:</label>
-                    <select id="propTypeSelect" onchange="applyFilters()">
-                        <option value="all">All Props</option>
-                    </select>
-                </div>
-                <div class="sort-group">
-                    <label>Sort By:</label>
-                    <select id="sortSelect" onchange="applyFilters()">
-                        <option value="ev">Expected Value</option>
-                        <option value="confidence">Confidence Score</option>
-                        <option value="kelly">Kelly Fraction</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="bets-grid" id="betsGrid">
-                <div class="loading">Loading bets...</div>
-            </div>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
-</body>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
