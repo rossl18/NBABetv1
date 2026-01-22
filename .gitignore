@@ -16,6 +16,8 @@ build/
 *.csv
 *.json
 !dashboard/public/data/.gitkeep
+!dashboard/package.json
+!dashboard/package-lock.json
 debug_sample_response.json
 
 # IDE
