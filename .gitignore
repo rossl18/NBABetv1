@@ -33,6 +33,8 @@ Thumbs.db
 dashboard/node_modules/
 dashboard/dist/
 dashboard/.vite/
+# But keep package-lock.json for reproducible builds
+!dashboard/package-lock.json
 
 # Logs
 *.log
