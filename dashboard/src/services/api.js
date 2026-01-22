@@ -45,7 +45,31 @@ export const getLatestBets = async () => {
       return []
     }
     
-    return data
+    // Normalize field names from capitalized to lowercase (e.g., Player -> player, Expected_Value -> expected_value)
+    const normalized = data.map(bet => ({
+      player: bet.Player || bet.player,
+      prop: bet.Prop || bet.prop,
+      line: bet.Line || bet.line,
+      over_under: bet['Over/Under'] || bet.over_under || bet.Over_Under,
+      odds: bet.Odds || bet.odds,
+      decimal_odds: bet.Decimal_Odds || bet.decimal_odds,
+      implied_probability: bet.Implied_Probability || bet.implied_probability,
+      model_probability: bet.Model_Probability || bet.model_probability,
+      probability_ci_lower: bet.Probability_CI_Lower || bet.probability_ci_lower,
+      probability_ci_upper: bet.Probability_CI_Upper || bet.probability_ci_upper,
+      edge: bet.Edge || bet.edge,
+      expected_value: bet.Expected_Value || bet.expected_value,
+      ev_ci_lower: bet.EV_CI_Lower || bet.ev_ci_lower,
+      ev_ci_upper: bet.EV_CI_Upper || bet.ev_ci_upper,
+      kelly_fraction: bet.Kelly_Fraction || bet.kelly_fraction,
+      confidence_score: bet.Confidence_Score || bet.confidence_score,
+      historical_games: bet.Historical_Games || bet.historical_games,
+      training_samples: bet.Training_Samples || bet.training_samples,
+      generated_at: bet.Generated_At || bet.generated_at
+    }))
+    
+    console.log(`Normalized ${normalized.length} bets`)
+    return normalized
   } catch (error) {
     if (error.name === 'AbortError') {
       console.error('Request timeout - file may not exist or server is slow')

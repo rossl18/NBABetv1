@@ -80,16 +80,16 @@ function BetsPage() {
     }
   }
 
-  // Get unique prop types from bets
-  const propTypes = [...new Set(bets.map(bet => bet.prop || bet.Prop))].filter(Boolean).sort()
+  // Get unique prop types from bets (data is now normalized)
+  const propTypes = [...new Set(bets.map(bet => bet.prop))].filter(Boolean).sort()
 
   const filteredBets = bets.filter(bet => {
-    // EV filter
-    if (filter === 'positive' && (bet.expected_value || bet.Expected_Value || 0) <= 0) return false
-    if (filter === 'high-value' && (bet.expected_value || bet.Expected_Value || 0) <= 0.10) return false
+    // EV filter (data is now normalized to lowercase)
+    if (filter === 'positive' && (bet.expected_value || 0) <= 0) return false
+    if (filter === 'high-value' && (bet.expected_value || 0) <= 0.10) return false
     
     // All-star filter
-    const playerName = bet.player || bet.Player || ''
+    const playerName = bet.player || ''
     if (allStarFilter === 'all-star') {
       if (!ALL_STAR_PLAYERS.some(star => playerName.includes(star) || star.includes(playerName))) return false
     }
@@ -98,7 +98,7 @@ function BetsPage() {
     }
     
     // Prop type filter
-    const propType = bet.prop || bet.Prop || ''
+    const propType = bet.prop || ''
     if (propTypeFilter !== 'all' && propType !== propTypeFilter) return false
     
     return true
