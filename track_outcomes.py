@@ -9,8 +9,11 @@ from typing import Optional, Dict
 import json
 import os
 
-# Database connection string
-DB_CONNECTION_STRING = "postgresql://neondb_owner:npg_4mPxqU1CzSoI@ep-summer-band-ahle3ux5-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Database connection string - use environment variable if set, otherwise use default
+DB_CONNECTION_STRING = os.getenv(
+    'DB_CONNECTION_STRING',
+    "postgresql://neondb_owner:npg_4mPxqU1CzSoI@ep-summer-band-ahle3ux5-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
 
 # Prop type to stat column mapping (same as in feature_engineering.py)
 PROP_TO_STAT = {

@@ -4,6 +4,8 @@ Also tracks outcomes and exports performance metrics
 """
 import pandas as pd
 import json
+import os
+import sys
 from datetime import date
 from main_workflow import generate_betting_dataset
 from save_to_database import save_props_to_database
@@ -11,57 +13,109 @@ from track_outcomes import process_past_props, export_performance_json
 
 def export_for_dashboard():
     """Generate data and export to JSON for dashboard"""
-    print("=" * 60)
-    print("Dashboard Data Export")
-    print("=" * 60)
-    
-    print("\n[Step 1/3] Generating betting dataset...")
-    df = generate_betting_dataset(
-        filter_overs_only=True,
-        min_games=10,
-        max_props=None,
-        debug=False
-    )
-    
-    if len(df) > 0:
-        # Save to database
-        print("\n[Step 2/3] Saving to database...")
+    try:
+        print("=" * 60)
+        print("Dashboard Data Export")
+        print("=" * 60)
+        
+        # Check for database connection string
+        db_conn = os.getenv('DB_CONNECTION_STRING')
+        if not db_conn:
+            print("⚠ Warning: DB_CONNECTION_STRING environment variable not set")
+            print("  Database operations will be skipped")
+        else:
+            print("✓ Database connection string found")
+        
+        print("\n[Step 1/3] Generating betting dataset...")
         try:
-            save_props_to_database(df)
-            print("✓ Saved to database")
+            df = generate_betting_dataset(
+                filter_overs_only=True,
+                min_games=10,
+                max_props=None,
+                debug=False
+            )
+            print(f"✓ Generated dataset with {len(df)} props")
         except Exception as e:
-            print(f"⚠ Warning: Could not save to database: {e}")
+            print(f"❌ Error generating betting dataset: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
         
-        # Track outcomes for past props (games that have already occurred)
-        print("\n[Step 3/3] Tracking outcomes and generating performance metrics...")
-        try:
-            # Process props from today that have already occurred
-            process_past_props(start_date=date.today())
-            # Export performance JSON
-            export_performance_json()
-            print("✓ Performance metrics updated")
-        except Exception as e:
-            print(f"⚠ Warning: Could not track outcomes: {e}")
-            print("  (This is normal if no games have occurred yet)")
-        
-        # Export to JSON for static site
-        # Convert DataFrame to list of dicts
-        bets_data = df.to_dict('records')
-        
-        # Save to dashboard data folder
-        import os
-        os.makedirs('dashboard/public/data', exist_ok=True)
-        output_path = 'dashboard/public/data/latest-bets.json'
-        with open(output_path, 'w') as f:
-            json.dump(bets_data, f, indent=2, default=str)
-        
-        print(f"\n✓ Exported {len(bets_data)} bets to {output_path}")
-        print("\n✅ Dashboard export complete!")
-        
-        return df
-    else:
-        print("No data to export")
-        return None
+        if len(df) > 0:
+            # Save to database
+            print("\n[Step 2/3] Saving to database...")
+            if db_conn:
+                try:
+                    save_props_to_database(df)
+                    print("✓ Saved to database")
+                except Exception as e:
+                    print(f"⚠ Warning: Could not save to database: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("⚠ Skipping database save (no connection string)")
+            
+            # Track outcomes for past props (games that have already occurred)
+            print("\n[Step 3/3] Tracking outcomes and generating performance metrics...")
+            if db_conn:
+                try:
+                    # Process props from today that have already occurred
+                    process_past_props(start_date=date.today())
+                    # Export performance JSON
+                    export_performance_json()
+                    print("✓ Performance metrics updated")
+                except Exception as e:
+                    print(f"⚠ Warning: Could not track outcomes: {e}")
+                    print("  (This is normal if no games have occurred yet)")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("⚠ Skipping outcome tracking (no connection string)")
+            
+            # Export to JSON for static site
+            # Convert DataFrame to list of dicts
+            bets_data = df.to_dict('records')
+            
+            # Save to dashboard data folder
+            os.makedirs('dashboard/public/data', exist_ok=True)
+            output_path = 'dashboard/public/data/latest-bets.json'
+            try:
+                with open(output_path, 'w') as f:
+                    json.dump(bets_data, f, indent=2, default=str)
+                print(f"\n✓ Exported {len(bets_data)} bets to {output_path}")
+            except Exception as e:
+                print(f"❌ Error writing JSON file: {e}")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+            
+            print("\n✅ Dashboard export complete!")
+            
+            return df
+        else:
+            print("⚠ No data to export (empty dataset)")
+            # Still create an empty JSON file so the dashboard doesn't break
+            os.makedirs('dashboard/public/data', exist_ok=True)
+            output_path = 'dashboard/public/data/latest-bets.json'
+            with open(output_path, 'w') as f:
+                json.dump([], f, indent=2)
+            print(f"✓ Created empty JSON file at {output_path}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Fatal error in export_for_dashboard: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
-    export_for_dashboard()
+    try:
+        export_for_dashboard()
+    except KeyboardInterrupt:
+        print("\n⚠ Interrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        print(f"❌ Unhandled exception: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

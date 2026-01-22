@@ -1,12 +1,16 @@
 """
 Database connection and query module for Neon PostgreSQL database
 """
+import os
 import psycopg2
 import pandas as pd
 from typing import Optional, Dict, Any
 
-# Database connection string
-DB_CONNECTION_STRING = "postgresql://neondb_owner:npg_4mPxqU1CzSoI@ep-summer-band-ahle3ux5-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Database connection string - use environment variable if set, otherwise use default
+DB_CONNECTION_STRING = os.getenv(
+    'DB_CONNECTION_STRING',
+    "postgresql://neondb_owner:npg_4mPxqU1CzSoI@ep-summer-band-ahle3ux5-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
 
 def get_db_connection():
     """Create and return a database connection"""
