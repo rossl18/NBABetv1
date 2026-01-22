@@ -34,28 +34,28 @@ function BetsPage() {
 
   const loadBets = async () => {
     setLoading(true)
+    console.log('Starting to load bets...')
+    const startTime = Date.now()
+    
     try {
-      // Add timeout to prevent infinite loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      )
-      
-      const dataPromise = getLatestBets()
-      const data = await Promise.race([dataPromise, timeoutPromise])
+      const data = await getLatestBets()
+      const loadTime = Date.now() - startTime
+      console.log(`Bets loaded in ${loadTime}ms`)
       
       if (Array.isArray(data)) {
         setBets(data)
-        console.log(`Loaded ${data.length} bets`)
+        console.log(`Successfully set ${data.length} bets`)
       } else {
         console.warn('Invalid data format:', data)
         setBets([])
       }
     } catch (error) {
-      console.error('Error loading bets:', error)
-      // Don't show alert, just log and set empty array
+      const loadTime = Date.now() - startTime
+      console.error(`Error loading bets after ${loadTime}ms:`, error)
       setBets([])
     } finally {
       setLoading(false)
+      console.log('Loading complete')
     }
   }
 
