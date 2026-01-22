@@ -33,16 +33,20 @@ function BetsPage() {
   }, [])
 
   const loadBets = async () => {
+    // Don't block UI - show empty state immediately
+    setBets([])
     setLoading(true)
     console.log('Starting to load bets...')
     const startTime = Date.now()
     
-    // Safety timeout - force stop loading after 5 seconds no matter what
+    // Safety timeout - force stop loading after 3 seconds no matter what
     const safetyTimeout = setTimeout(() => {
-      console.error('SAFETY TIMEOUT: Force stopping load after 5 seconds')
+      console.error('SAFETY TIMEOUT: Force stopping load after 3 seconds')
       setLoading(false)
-      setBets([])
-    }, 5000)
+      if (bets.length === 0) {
+        setBets([]) // Ensure empty state is shown
+      }
+    }, 3000)
     
     try {
       const data = await getLatestBets()
@@ -51,11 +55,11 @@ function BetsPage() {
       const loadTime = Date.now() - startTime
       console.log(`Bets loaded in ${loadTime}ms`)
       
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         setBets(data)
         console.log(`Successfully set ${data.length} bets`)
       } else {
-        console.warn('Invalid data format:', data)
+        console.warn('Invalid data format or empty:', data)
         setBets([])
       }
     } catch (error) {
@@ -130,17 +134,18 @@ function BetsPage() {
       : 0
   }
 
-  // Always show content, even if loading - but show loading indicator
-  if (loading && bets.length === 0) {
-    return <LoadingSpinner />
-  }
+  // Never block the UI - always show content, just indicate loading state
+  // Show spinner only if we have no data AND are loading
+  const showSpinner = loading && bets.length === 0
 
   return (
     <div className="bets-page">
       <div className="container">
+        {showSpinner && <LoadingSpinner />}
         <div className="page-header">
           <div>
             <h1>Best Bets</h1>
+            {loading && <p style={{color: '#666', fontSize: '0.9rem'}}>Loading...</p>}
             <p className="props-count">Showing {filteredBets.length} of {bets.length} props</p>
           </div>
           {isAdmin && (

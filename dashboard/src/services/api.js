@@ -19,9 +19,9 @@ export const getLatestBets = async () => {
     // Use AbortController for timeout - fail fast if file doesn't exist
     const controller = new AbortController()
     const timeoutId = setTimeout(() => {
-      console.error('Aborting fetch after 2 seconds')
+      console.error('Aborting fetch after 1 second - taking too long')
       controller.abort()
-    }, 2000) // 2 second timeout - very aggressive
+    }, 1000) // 1 second timeout - very aggressive
     
     const fetchStart = Date.now()
     const response = await fetch(url, {
