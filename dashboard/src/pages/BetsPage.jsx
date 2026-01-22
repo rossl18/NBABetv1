@@ -130,7 +130,8 @@ function BetsPage() {
       : 0
   }
 
-  if (loading) {
+  // Always show content, even if loading - but show loading indicator
+  if (loading && bets.length === 0) {
     return <LoadingSpinner />
   }
 
