@@ -169,3 +169,106 @@
   letter-spacing: 0.025em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .bet-card {
+    padding: 1.25rem;
+    border-radius: 12px;
+  }
+
+  .bet-header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .player-name {
+    font-size: 1.125rem;
+  }
+
+  .prop-type {
+    font-size: 0.8rem;
+  }
+
+  .bet-details {
+    margin-bottom: 1rem;
+  }
+
+  .detail-row {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .detail-row .label {
+    font-size: 0.8rem;
+  }
+
+  .detail-row .value {
+    font-size: 0.875rem;
+  }
+
+  .ev-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+  }
+
+  .ev-value {
+    font-size: 1.5rem;
+  }
+
+  .ev-label {
+    font-size: 0.75rem;
+  }
+
+  .ev-ci {
+    font-size: 0.7rem;
+  }
+
+  .metrics-row {
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-direction: column;
+  }
+
+  .metric {
+    width: 100%;
+  }
+
+  .metric-label {
+    font-size: 0.8rem;
+  }
+
+  .metric-value {
+    font-size: 0.85rem;
+  }
+
+  .metric-value.kelly {
+    font-size: 1rem;
+  }
+
+  .edge-badge {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .bet-card {
+    padding: 1rem;
+  }
+
+  .player-name {
+    font-size: 1rem;
+  }
+
+  .ev-value {
+    font-size: 1.25rem;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
