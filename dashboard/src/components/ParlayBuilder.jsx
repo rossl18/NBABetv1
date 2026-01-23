@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import BetCard from './BetCard'
 import './ParlayBuilder.css'
 
 function ParlayBuilder({ bets = [] }) {
   const [selectedBets, setSelectedBets] = useState([])
   const [betAmount, setBetAmount] = useState(100)
+  const selectedSectionRef = useRef(null)
 
   // Convert American odds to decimal
   const americanToDecimal = (americanOdds) => {
@@ -61,6 +62,20 @@ function ParlayBuilder({ bets = [] }) {
     }
   }
 
+  // Scroll to selected bets section when a bet is added
+  useEffect(() => {
+    if (selectedBets.length > 0 && selectedSectionRef.current) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        selectedSectionRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start',
+          inline: 'nearest'
+        })
+      }, 150)
+    }
+  }, [selectedBets.length]) // Only trigger when count changes (bet added/removed)
+
   const toggleBet = (bet) => {
     const isSelected = selectedBets.some(b => 
       b.player === bet.player && 
@@ -100,7 +115,7 @@ function ParlayBuilder({ bets = [] }) {
         </p>
 
         {/* Selected Bets */}
-        <div className="selected-bets-section">
+        <div className="selected-bets-section" ref={selectedSectionRef}>
           <div className="selected-bets-header">
             <h2>Selected Bets ({selectedBets.length})</h2>
             {selectedBets.length > 0 && (
