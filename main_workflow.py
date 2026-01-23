@@ -54,15 +54,17 @@ def process_prop(row: pd.Series, filter_overs_only: bool = True, min_games: int 
             return None
         
         # Create training data - ONLY from this player's historical games
-        X, y = create_training_data(historical_df, prop_type, line, over_under)
+        # Use time-based weighting to emphasize recent games
+        X, y, sample_weights = create_training_data(historical_df, prop_type, line, over_under, use_time_weighting=True)
         
         if len(X) == 0:
             print(f"  No valid training data after feature engineering")
             return None
         
         # Train model - ONLY on this player's data
+        # Use time-based sample weights to emphasize recent performance
         predictor = PropPredictor(model_type='random_forest')
-        predictor.train(X, y)
+        predictor.train(X, y, sample_weight=sample_weights)
         
         # Predict probability using most recent game features
         # Need to pass line to prepare_features_for_prediction

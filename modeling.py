@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
 from sklearn.metrics import accuracy_score, roc_auc_score
 from typing import Tuple, Optional
 import warnings
@@ -24,10 +25,17 @@ class PropPredictor:
         self.model_type = model_type
         self.model = None
         self.scaler = StandardScaler()
+        self.variance_selector = None
+        self.feature_selector = None
         self.is_trained = False
+        # Feature name tracking:
+        # - input_feature_names: columns expected at prediction time (pre-selection)
+        # - feature_names: selected feature names (post-selection) for reporting/debug
+        self.input_feature_names = None
         self.feature_names = None
         
-    def train(self, X: pd.DataFrame, y: pd.Series, test_size: float = 0.2, random_state: int = 42):
+    def train(self, X: pd.DataFrame, y: pd.Series, test_size: float = 0.2, random_state: int = 42, 
+              sample_weight: Optional[pd.Series] = None):
         """
         Train the model on historical data
         
@@ -36,10 +44,14 @@ class PropPredictor:
             y: Target series (binary)
             test_size: Proportion of data for testing
             random_state: Random seed
+            sample_weight: Optional sample weights (for time-based weighting)
         """
         if len(X) == 0 or len(y) == 0:
             raise ValueError("Training data is empty")
         
+        # Save the full input feature schema (pre-selection) so prediction can align correctly
+        self.input_feature_names = X.columns.tolist()
+
         # Ensure target is binary (0/1)
         unique_values = y.unique()
         if len(unique_values) > 2:
@@ -68,33 +80,80 @@ class PropPredictor:
                 X, y, test_size=test_size, random_state=random_state
             )
         
-        # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        # Feature selection: Remove low-variance features and select top features
+        # Remove features with near-zero variance (less informative)
+        self.variance_selector = VarianceThreshold(threshold=0.01)
+        X_train_var = self.variance_selector.fit_transform(X_train)
+        X_test_var = self.variance_selector.transform(X_test)
         
-        # Initialize model
+        # Get feature names after variance filtering
+        selected_feature_names = X_train.columns[self.variance_selector.get_support()].tolist()
+        
+        # Select top K features based on univariate statistical tests
+        # Use min of 10 features or 80% of available features
+        k_features = min(max(10, int(len(selected_feature_names) * 0.8)), len(selected_feature_names))
+        
+        if k_features > 0 and len(np.unique(y_train)) == 2:
+            try:
+                self.feature_selector = SelectKBest(score_func=f_classif, k=k_features)
+                X_train_selected = self.feature_selector.fit_transform(X_train_var, y_train)
+                X_test_selected = self.feature_selector.transform(X_test_var)
+                
+                # Update feature names to only include selected features
+                selected_indices = self.feature_selector.get_support(indices=True)
+                self.feature_names = [selected_feature_names[i] for i in selected_indices]
+            except Exception as e:
+                print(f"  Warning: Feature selection failed ({e}), using all features")
+                X_train_selected = X_train_var
+                X_test_selected = X_test_var
+                self.feature_names = selected_feature_names
+                self.feature_selector = None
+        else:
+            # Not enough features or not binary classification, skip feature selection
+            X_train_selected = X_train_var
+            X_test_selected = X_test_var
+            self.feature_names = selected_feature_names
+            self.feature_selector = None
+        
+        # Scale features
+        X_train_scaled = self.scaler.fit_transform(X_train_selected)
+        X_test_scaled = self.scaler.transform(X_test_selected)
+        
+        # Prepare sample weights if provided
+        train_weights = None
+        if sample_weight is not None:
+            train_weights = sample_weight.loc[X_train.index].values
+        
+        # Initialize model with optimized hyperparameters
         if self.model_type == 'random_forest':
             self.model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2,
+                n_estimators=200,  # Increased from 100 for better generalization
+                max_depth=12,  # Slightly increased from 10
+                min_samples_split=10,  # Increased from 5 to reduce overfitting
+                min_samples_leaf=5,  # Increased from 2 to reduce overfitting
+                max_features='sqrt',  # Use sqrt of features (best practice for RF)
+                class_weight='balanced',  # Handle class imbalance
                 random_state=random_state,
                 n_jobs=-1
             )
         elif self.model_type == 'gradient_boosting':
             self.model = GradientBoostingClassifier(
-                n_estimators=100,
-                max_depth=5,
-                learning_rate=0.1,
+                n_estimators=150,  # Increased from 100
+                max_depth=6,  # Increased from 5
+                learning_rate=0.08,  # Slightly reduced for better generalization
+                min_samples_split=10,
+                min_samples_leaf=5,
                 random_state=random_state
             )
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
-        # Train model
-        self.model.fit(X_train_scaled, y_train)
-        self.feature_names = X.columns.tolist()
+        # Train model with sample weights if provided
+        if train_weights is not None:
+            self.model.fit(X_train_scaled, y_train, sample_weight=train_weights)
+        else:
+            self.model.fit(X_train_scaled, y_train)
+        
         self.training_samples = len(X_train)
         self.is_trained = True
         
@@ -141,17 +200,35 @@ class PropPredictor:
         if len(X) > 1:
             X = X.iloc[[-1]]
         
-        # Ensure features match training features
-        if self.feature_names:
-            missing_features = set(self.feature_names) - set(X.columns)
+        # Align to the training-time input feature schema (pre-selection)
+        if self.input_feature_names:
+            missing_features = set(self.input_feature_names) - set(X.columns)
             if missing_features:
+                # Keep noise low: only print if we're genuinely missing expected inputs
                 print(f"Warning: Missing features {missing_features}, filling with 0")
                 for feat in missing_features:
                     X[feat] = 0
-            X = X[self.feature_names]
+            X = X[self.input_feature_names]
+        
+        # Convert to numpy array for feature selection
+        X_array = X.values if isinstance(X, pd.DataFrame) else X
+        # Ensure no NaNs/infs reach sklearn selectors
+        X_array = np.nan_to_num(X_array, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Apply variance threshold if used during training
+        if self.variance_selector is not None:
+            X_var = self.variance_selector.transform(X_array)
+        else:
+            X_var = X_array
+        
+        # Apply feature selection if used during training
+        if self.feature_selector is not None:
+            X_selected = self.feature_selector.transform(X_var)
+        else:
+            X_selected = X_var
         
         # Scale and predict
-        X_scaled = self.scaler.transform(X)
+        X_scaled = self.scaler.transform(X_selected)
         proba = self.model.predict_proba(X_scaled)[0, 1]
         
         # Apply probability calibration to prevent extreme values and account for model uncertainty
@@ -184,17 +261,31 @@ class PropPredictor:
         if len(X) > 1:
             X = X.iloc[[-1]]
         
-        # Ensure features match training features
-        if self.feature_names:
-            missing_features = set(self.feature_names) - set(X.columns)
+        # Align to the training-time input feature schema (pre-selection)
+        if self.input_feature_names:
+            missing_features = set(self.input_feature_names) - set(X.columns)
             if missing_features:
                 print(f"Warning: Missing features {missing_features}, filling with 0")
                 for feat in missing_features:
                     X[feat] = 0
-            X = X[self.feature_names]
+            X = X[self.input_feature_names]
         
-        # Scale and predict
-        X_scaled = self.scaler.transform(X)
+        # Apply variance threshold if used during training
+        X_array = X.values if isinstance(X, pd.DataFrame) else X
+        X_array = np.nan_to_num(X_array, nan=0.0, posinf=0.0, neginf=0.0)
+        if self.variance_selector is not None:
+            X_var = self.variance_selector.transform(X_array)
+        else:
+            X_var = X_array
+        
+        # Apply feature selection if used during training
+        if self.feature_selector is not None:
+            X_selected = self.feature_selector.transform(X_var)
+        else:
+            X_selected = X_var
+        
+        # Scale and get predictions
+        X_scaled = self.scaler.transform(X_selected)
         
         # Get predictions from all trees (for Random Forest)
         if self.model_type == 'random_forest' and hasattr(self.model, 'estimators_'):
@@ -224,6 +315,21 @@ class PropPredictor:
             return float(calibrated_mean), float(calibrated_lower), float(calibrated_upper)
         else:
             # Fallback: use single prediction with estimated uncertainty
+            # Apply variance threshold if used during training
+            X_array = X.values if isinstance(X, pd.DataFrame) else X
+            X_array = np.nan_to_num(X_array, nan=0.0, posinf=0.0, neginf=0.0)
+            if self.variance_selector is not None:
+                X_var = self.variance_selector.transform(X_array)
+            else:
+                X_var = X_array
+            
+            # Apply feature selection if used during training
+            if self.feature_selector is not None:
+                X_selected = self.feature_selector.transform(X_var)
+            else:
+                X_selected = X_var
+            
+            X_scaled = self.scaler.transform(X_selected)
             proba = self.model.predict_proba(X_scaled)[0, 1]
             
             # Apply calibration

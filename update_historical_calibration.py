@@ -9,14 +9,25 @@ from typing import Optional
 import os
 import sys
 
-# Fix Unicode encoding for Windows console
-if sys.platform == 'win32':
+def _configure_utf8_console() -> None:
+    """
+    Best-effort UTF-8 output on Windows without breaking stdout/stderr.
+
+    Avoid wrapping TextIOWrapper around sys.stdout/sys.stderr buffers because it can
+    lead to 'I/O operation on closed file' on interpreter shutdown in some shells.
+    """
+    if sys.platform != 'win32':
+        return
     try:
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    except:
-        pass
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        # If reconfigure isn't supported (or fails), continue with defaults.
+        return
+
+_configure_utf8_console()
 
 # Database connection string
 DB_CONNECTION_STRING = os.getenv(
@@ -110,8 +121,10 @@ def update_historical_probabilities():
                 else:
                     decimal_odds = 1 + (100 / abs(odds))
                 
-                # Calculate new EV
-                new_ev = (new_prob * (decimal_odds - 1)) - ((1 - new_prob) * 1)
+                # Calculate new EV using market-adjusted calculation
+                # Import the function to use the same logic as main workflow
+                from expected_value import calculate_expected_value_from_american
+                new_ev = calculate_expected_value_from_american(new_prob, odds, implied_prob)
                 
                 # Calculate new edge
                 if implied_prob and not pd.isna(implied_prob):
@@ -152,13 +165,10 @@ def update_historical_probabilities():
         for bet_id, prop_id, old_prob, old_ev, odds, implied_prob in bets:
             new_prob = apply_new_calibration(old_prob, implied_prob)
             
-            # Recalculate EV
+            # Recalculate EV using market-adjusted calculation
             if odds and not pd.isna(odds):
-                if odds > 0:
-                    decimal_odds = 1 + (odds / 100)
-                else:
-                    decimal_odds = 1 + (100 / abs(odds))
-                new_ev = (new_prob * (decimal_odds - 1)) - ((1 - new_prob) * 1)
+                from expected_value import calculate_expected_value_from_american
+                new_ev = calculate_expected_value_from_american(new_prob, odds, implied_prob)
             else:
                 new_ev = old_ev
             

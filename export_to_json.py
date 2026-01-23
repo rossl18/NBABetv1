@@ -11,14 +11,24 @@ from main_workflow import generate_betting_dataset
 from save_to_database import save_props_to_database
 from track_outcomes import process_past_props, export_performance_json
 
-# Fix Unicode encoding for Windows console
-if sys.platform == 'win32':
+def _configure_utf8_console() -> None:
+    """
+    Best-effort UTF-8 output on Windows without breaking stdout/stderr.
+
+    Avoid wrapping TextIOWrapper around sys.stdout/sys.stderr buffers because it can
+    lead to 'I/O operation on closed file' on interpreter shutdown in some shells.
+    """
+    if sys.platform != 'win32':
+        return
     try:
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    except:
-        pass  # If it fails, continue without fixing (some environments handle it differently)
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        return
+
+_configure_utf8_console()
 
 def export_for_dashboard():
     """Generate data and export to JSON for dashboard"""

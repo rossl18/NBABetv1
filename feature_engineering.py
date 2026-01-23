@@ -79,10 +79,10 @@ def create_target_variable(df: pd.DataFrame, prop_type: str, line: float, over_u
 
 def prepare_features_for_prediction(df: pd.DataFrame, prop_type: str, line: float = None) -> pd.DataFrame:
     """
-    Prepare feature set for model prediction
+    Prepare feature set for model prediction with enhanced feature engineering
     
     The database already has engineered features (feat_roll_pts_5, etc.)
-    We'll use those plus any additional features we can create.
+    We'll use those plus additional sophisticated features we can create.
     
     Args:
         df: Historical dataframe
@@ -123,13 +123,137 @@ def prepare_features_for_prediction(df: pd.DataFrame, prop_type: str, line: floa
     
     result_df = features_df[feature_cols].copy()
     
-    # Add line as a feature if provided (important for prediction)
-    if line is not None:
-        result_df['line'] = line
+    # Find the relevant stat column for this prop type
+    prop_to_stat = {
+        'Points': ['pts', 'points', 'point'],
+        'Rebounds': ['reb', 'rebounds', 'rebound'],
+        'Assists': ['ast', 'assists', 'assist'],
+        'Threes': ['3p', 'threes', 'three', '3pm', '3p_made'],
+        'Made Threes': ['3p', 'threes', 'three', '3pm', '3p_made'],
+        'Steals': ['stl', 'steals', 'steal'],
+        'Blocks': ['blk', 'blocks', 'block']
+    }
     
+    stat_keywords = prop_to_stat.get(prop_type, [prop_type.lower()])
+    stat_column = None
+    for keyword in stat_keywords:
+        matching_cols = [col for col in result_df.columns if keyword.lower() in col.lower() 
+                        and 'target' not in col.lower() and 'feat' not in col.lower()]
+        if matching_cols:
+            stat_column = matching_cols[0]
+            break
+    
+    # Enhanced feature engineering
+    if stat_column and stat_column in features_df.columns and len(features_df) > 0:
+        stats = features_df[stat_column].values
+        
+        # Calculate rolling statistics if we have enough data
+        if len(stats) >= 5:
+            # Recent averages
+            recent_5_avg = np.mean(stats[-5:]) if len(stats) >= 5 else np.nan
+            recent_10_avg = np.mean(stats[-10:]) if len(stats) >= 10 else np.nan
+            season_avg = np.mean(stats) if len(stats) > 0 else np.nan
+            
+            # Recent standard deviation
+            recent_10_std = np.std(stats[-10:]) if len(stats) >= 10 else np.nan
+            
+            # Add line context features if line is provided
+            if line is not None and not np.isnan(line):
+                result_df['line'] = line
+                
+                # Line vs recent performance
+                if not np.isnan(recent_5_avg):
+                    result_df['line_vs_recent_5'] = line - recent_5_avg
+                    result_df['line_vs_recent_5_pct'] = (line - recent_5_avg) / max(recent_5_avg, 0.1)
+                
+                if not np.isnan(recent_10_avg):
+                    result_df['line_vs_recent_10'] = line - recent_10_avg
+                    result_df['line_vs_recent_10_pct'] = (line - recent_10_avg) / max(recent_10_avg, 0.1)
+                
+                # Line vs season average
+                if not np.isnan(season_avg):
+                    result_df['line_vs_season_avg'] = line - season_avg
+                    result_df['line_vs_season_avg_pct'] = (line - season_avg) / max(season_avg, 0.1)
+                
+                # Line difficulty (normalized by volatility)
+                if not np.isnan(recent_10_std) and recent_10_std > 0:
+                    result_df['line_difficulty'] = (line - recent_10_avg) / recent_10_std
+                
+                # Historical hit rate at similar lines (within ±1.5 of current line)
+                if len(stats) >= 5:
+                    similar_line_mask = np.abs(stats - line) <= 1.5
+                    if similar_line_mask.sum() > 0:
+                        # For training, we'll calculate this per row in create_training_data
+                        # For prediction, use recent games
+                        recent_similar = np.abs(stats[-10:] - line) <= 1.5
+                        if recent_similar.sum() > 0:
+                            result_df['recent_similar_line_count'] = recent_similar.sum()
+                        else:
+                            result_df['recent_similar_line_count'] = 0
+                    else:
+                        result_df['recent_similar_line_count'] = 0
+            
+            # Trend features
+            if len(stats) >= 5:
+                # Trend: slope of last 5 games
+                recent_5 = stats[-5:]
+                x = np.arange(len(recent_5))
+                if len(recent_5) > 1 and np.std(x) > 0:
+                    trend_5 = np.polyfit(x, recent_5, 1)[0]  # Slope
+                    result_df['trend_5_games'] = trend_5
+                else:
+                    result_df['trend_5_games'] = 0
+            
+            if len(stats) >= 6:
+                # Momentum: change from previous 3 to last 3
+                prev_3_avg = np.mean(stats[-6:-3]) if len(stats) >= 6 else np.nan
+                last_3_avg = np.mean(stats[-3:])
+                if not np.isnan(prev_3_avg) and prev_3_avg > 0:
+                    result_df['momentum'] = (last_3_avg - prev_3_avg) / prev_3_avg
+                else:
+                    result_df['momentum'] = 0
+            
+            # Volatility
+            if not np.isnan(recent_10_std):
+                result_df['volatility'] = recent_10_std
+            
+            # Consistency score (1 - coefficient of variation)
+            if not np.isnan(recent_10_avg) and recent_10_avg > 0 and not np.isnan(recent_10_std):
+                result_df['consistency_score'] = 1 - (recent_10_std / recent_10_avg)
+            else:
+                result_df['consistency_score'] = 0.5
+            
+            # Recent vs season performance
+            if not np.isnan(season_avg) and season_avg > 0:
+                if not np.isnan(recent_5_avg):
+                    result_df['recent_vs_season_5'] = (recent_5_avg - season_avg) / season_avg
+                if not np.isnan(recent_10_avg):
+                    result_df['recent_vs_season_10'] = (recent_10_avg - season_avg) / season_avg
+            
+            # Interaction features (if line is provided)
+            if line is not None and not np.isnan(line):
+                if not np.isnan(recent_5_avg):
+                    result_df['rolling_5_x_line'] = recent_5_avg * line
+                    result_df['line_div_rolling_5'] = line / max(recent_5_avg, 0.1)
+                if not np.isnan(recent_10_std) and recent_10_std > 0:
+                    result_df['volatility_x_line'] = recent_10_std * line
+        
+        # Fill NaN values with 0 for new features
+        new_feature_cols = [col for col in result_df.columns if col not in feature_cols]
+        for col in new_feature_cols:
+            result_df[col] = result_df[col].fillna(0)
+    else:
+        # Fallback: just add line if provided
+        if line is not None:
+            result_df['line'] = line
+    
+    # Final safety: ensure no NaNs leak into modeling/prediction
+    result_df = result_df.fillna(0)
+
     return result_df
 
-def create_training_data(df: pd.DataFrame, prop_type: str, line: float, over_under: str) -> tuple:
+def create_training_data(df: pd.DataFrame, prop_type: str, line: float, over_under: str, 
+                         use_time_weighting: bool = True) -> tuple:
     """
     Create complete training dataset with features and target
     
@@ -138,9 +262,10 @@ def create_training_data(df: pd.DataFrame, prop_type: str, line: float, over_und
         prop_type: Type of prop
         line: Line value
         over_under: 'Over' or 'Under'
+        use_time_weighting: If True, add sample weights (recent games weighted more)
     
     Returns:
-        Tuple of (X_features, y_target) DataFrames
+        Tuple of (X_features, y_target, sample_weights) DataFrames/Series
     """
     # Create target variable
     y = create_target_variable(df, prop_type, line, over_under)
@@ -158,6 +283,49 @@ def create_training_data(df: pd.DataFrame, prop_type: str, line: float, over_und
     # For training, we use the same line for all rows (the current line we're predicting)
     X = prepare_features_for_prediction(df, prop_type, line=line)
     
+    # Calculate historical hit rate at similar lines for each row
+    # This helps the model understand line context
+    prop_to_stat = {
+        'Points': ['pts', 'points', 'point'],
+        'Rebounds': ['reb', 'rebounds', 'rebound'],
+        'Assists': ['ast', 'assists', 'assist'],
+        'Threes': ['3p', 'threes', 'three', '3pm', '3p_made'],
+        'Made Threes': ['3p', 'threes', 'three', '3pm', '3p_made'],
+        'Steals': ['stl', 'steals', 'steal'],
+        'Blocks': ['blk', 'blocks', 'block']
+    }
+    
+    stat_keywords = prop_to_stat.get(prop_type, [prop_type.lower()])
+    stat_column = None
+    for keyword in stat_keywords:
+        matching_cols = [col for col in df.columns if keyword.lower() in col.lower() 
+                        and 'target' not in col.lower() and 'feat' not in col.lower()]
+        if matching_cols:
+            stat_column = matching_cols[0]
+            break
+    
+    if stat_column and stat_column in df.columns:
+        # Calculate historical hit rate at similar lines for each training sample
+        stats = df[stat_column].values
+        similar_line_hit_rates = []
+        
+        for i in range(len(stats)):
+            # For each historical game, calculate hit rate at similar lines in previous games
+            if i > 0:
+                prev_stats = stats[:i]
+                prev_targets = y.iloc[:i].values
+                # Find games with similar lines (within ±1.5)
+                similar_mask = np.abs(prev_stats - line) <= 1.5
+                if similar_mask.sum() > 0:
+                    hit_rate = prev_targets[similar_mask].mean()
+                    similar_line_hit_rates.append(hit_rate)
+                else:
+                    similar_line_hit_rates.append(0.5)  # Default to 50% if no similar lines
+            else:
+                similar_line_hit_rates.append(0.5)  # First game has no history
+        
+        X['historical_hit_rate_similar_line'] = similar_line_hit_rates
+    
     # Align indices
     common_idx = X.index.intersection(y.index)
     X = X.loc[common_idx]
@@ -168,4 +336,19 @@ def create_training_data(df: pd.DataFrame, prop_type: str, line: float, over_und
     X = X[valid_mask]
     y = y[valid_mask]
     
-    return X, y
+    # Create sample weights (time-based weighting: recent games weighted more)
+    sample_weights = None
+    if use_time_weighting and len(X) > 0:
+        # Weight recent games more heavily using exponential decay
+        # Most recent game gets weight 1.0, older games get progressively less
+        n = len(X)
+        decay_rate = 0.05  # Adjust this to control how quickly weights decay
+        # Reverse order: most recent = index n-1, oldest = index 0
+        weights = np.exp(-decay_rate * np.arange(n)[::-1])
+        # Normalize so max weight is 1.0
+        weights = weights / weights.max()
+        sample_weights = pd.Series(weights, index=X.index)
+    else:
+        sample_weights = pd.Series(np.ones(len(X)), index=X.index)
+    
+    return X, y, sample_weights

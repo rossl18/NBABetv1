@@ -91,9 +91,9 @@ from feature_engineering import create_training_data
 from modeling import PropPredictor
 from expected_value import calculate_expected_value_from_american
 
-X, y = create_training_data(historical_df, "Points", 25.5, "Over")
-predictor = PropPredictor()
-predictor.train(X, y)
+X, y, sample_weights = create_training_data(historical_df, "Points", 25.5, "Over", use_time_weighting=True)
+predictor = PropPredictor(model_type='random_forest')
+predictor.train(X, y, sample_weight=sample_weights)
 probability = predictor.predict_probability(X.iloc[[-1]])
 ev = calculate_expected_value_from_american(probability, -110)
 ```
