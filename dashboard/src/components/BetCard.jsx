@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { memo } from 'react'
 import EVMeter from './EVMeter'
 import './BetCard.css'
 
-function BetCard({ bet }) {
+const BetCard = memo(function BetCard({ bet }) {
   const ev = bet.expected_value || 0
   const prob = bet.model_probability || 0
   const confidence = bet.confidence_score || 0
@@ -87,6 +87,6 @@ function BetCard({ bet }) {
       )}
     </div>
   )
-}
+})
 
 export default BetCard

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import BetCard from './BetCard'
 import './ParlayBuilder.css'
 
@@ -8,25 +8,32 @@ function ParlayBuilder({ bets = [] }) {
   const selectedSectionRef = useRef(null)
 
   // Convert American odds to decimal
-  const americanToDecimal = (americanOdds) => {
+  const americanToDecimal = useCallback((americanOdds) => {
     if (americanOdds > 0) {
       return 1 + (americanOdds / 100)
     } else {
       return 1 + (100 / Math.abs(americanOdds))
     }
-  }
+  }, [])
 
   // Convert decimal odds to American
-  const decimalToAmerican = (decimalOdds) => {
+  const decimalToAmerican = useCallback((decimalOdds) => {
     if (decimalOdds >= 2.0) {
       return Math.round((decimalOdds - 1) * 100)
     } else {
       return Math.round(-100 / (decimalOdds - 1))
     }
-  }
+  }, [])
 
-  // Calculate parlay odds and probability
-  const calculateParlay = () => {
+  // Memoize selected bet IDs for fast lookup
+  const selectedBetIds = useMemo(() => {
+    return new Set(selectedBets.map(b => 
+      `${b.player}|${b.prop}|${b.line}|${b.over_under}`
+    ))
+  }, [selectedBets])
+
+  // Calculate parlay odds and probability - memoized
+  const parlay = useMemo(() => {
     if (selectedBets.length === 0) {
       return {
         combinedOdds: null,
@@ -60,51 +67,43 @@ function ParlayBuilder({ bets = [] }) {
       potentialProfit,
       totalReturn
     }
-  }
+  }, [selectedBets, betAmount, americanToDecimal, decimalToAmerican])
 
   // Scroll to selected bets section when a bet is added
   useEffect(() => {
     if (selectedBets.length > 0 && selectedSectionRef.current) {
       // Small delay to ensure DOM has updated
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         selectedSectionRef.current?.scrollIntoView({ 
           behavior: 'smooth', 
           block: 'start',
           inline: 'nearest'
         })
       }, 150)
+      return () => clearTimeout(timeoutId)
     }
   }, [selectedBets.length]) // Only trigger when count changes (bet added/removed)
 
-  const toggleBet = (bet) => {
-    const isSelected = selectedBets.some(b => 
-      b.player === bet.player && 
-      b.prop === bet.prop && 
-      b.line === bet.line && 
-      b.over_under === bet.over_under
-    )
+  const toggleBet = useCallback((bet) => {
+    const betId = `${bet.player}|${bet.prop}|${bet.line}|${bet.over_under}`
+    const isSelected = selectedBetIds.has(betId)
 
     if (isSelected) {
-      setSelectedBets(selectedBets.filter(b => 
-        !(b.player === bet.player && 
-          b.prop === bet.prop && 
-          b.line === bet.line && 
-          b.over_under === bet.over_under)
+      setSelectedBets(prev => prev.filter(b => 
+        `${b.player}|${b.prop}|${b.line}|${b.over_under}` !== betId
       ))
     } else {
-      setSelectedBets([...selectedBets, bet])
+      setSelectedBets(prev => [...prev, bet])
     }
-  }
+  }, [selectedBetIds])
 
-  const removeBet = (index) => {
-    setSelectedBets(selectedBets.filter((_, i) => i !== index))
-  }
+  const removeBet = useCallback((index) => {
+    setSelectedBets(prev => prev.filter((_, i) => i !== index))
+  }, [])
 
-  const clearParlay = () => {
+  const clearParlay = useCallback(() => {
     setSelectedBets([])
-  }
-
-  const parlay = calculateParlay()
+  }, [])
 
   return (
     <div className="parlay-builder">
@@ -204,16 +203,12 @@ function ParlayBuilder({ bets = [] }) {
             Click on any bet card to add it to your parlay. Click again to remove it.
           </p>
           <div className="bets-grid">
-            {bets.map((bet, index) => {
-              const isSelected = selectedBets.some(b => 
-                b.player === bet.player && 
-                b.prop === bet.prop && 
-                b.line === bet.line && 
-                b.over_under === bet.over_under
-              )
+            {bets.slice(0, 200).map((bet, index) => {
+              const betId = `${bet.player}|${bet.prop}|${bet.line}|${bet.over_under}`
+              const isSelected = selectedBetIds.has(betId)
               return (
                 <div 
-                  key={index} 
+                  key={`${bet.player}-${bet.prop}-${bet.line}-${bet.over_under}-${index}`} 
                   className={`bet-card-wrapper ${isSelected ? 'selected' : ''}`}
                   onClick={() => toggleBet(bet)}
                 >
@@ -224,6 +219,11 @@ function ParlayBuilder({ bets = [] }) {
                 </div>
               )
             })}
+            {bets.length > 200 && (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: '#666' }}>
+                Showing first 200 bets. Use filters to narrow down results.
+              </div>
+            )}
           </div>
         </div>
       </div>

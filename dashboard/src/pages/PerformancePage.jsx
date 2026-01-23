@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { getPerformanceData } from '../services/api'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -52,6 +52,19 @@ function PerformancePage() {
       setLoading(false)
     }
   }
+
+  // Memoize reversed overTime data to prevent recreating on every render
+  const reversedOverTime = useMemo(() => {
+    if (!data?.overTime || !Array.isArray(data.overTime)) return []
+    // Limit to last 100 days to prevent performance issues
+    return data.overTime.slice(-100).reverse()
+  }, [data?.overTime])
+
+  // Limit chart data to prevent rendering issues
+  const chartData = useMemo(() => {
+    if (!data?.overTime || !Array.isArray(data.overTime)) return []
+    return data.overTime.slice(-100) // Last 100 days max
+  }, [data?.overTime])
 
   if (loading) {
     return <LoadingSpinner />
@@ -273,64 +286,80 @@ function PerformancePage() {
         <div className="charts-section">
           <div className="chart-card">
             <h2>Cumulative Profit Over Time</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.overTime}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="cumulative" stroke="#667eea" strokeWidth={2} name="Cumulative Profit ($)" />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="cumulative" stroke="#667eea" strokeWidth={2} name="Cumulative Profit ($)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No data available</div>
+            )}
           </div>
 
           <div className="chart-card">
             <h2>Win Rate by Day</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.overTime}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis domain={[0, 100]} />
-                <Tooltip 
-                  formatter={(value, name) => {
-                    if (name === 'winRate') return [`${value}%`, 'Win Rate'];
-                    return [value, name];
-                  }}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="winRate" stroke="#10b981" strokeWidth={2} name="Win Rate (%)" />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip 
+                    formatter={(value, name) => {
+                      if (name === 'winRate') return [`${value}%`, 'Win Rate'];
+                      return [value, name];
+                    }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="winRate" stroke="#10b981" strokeWidth={2} name="Win Rate (%)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No data available</div>
+            )}
           </div>
 
           <div className="chart-card">
             <h2>Performance by Prop Type</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.byProp}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="prop" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="wins" fill="#10b981" name="Wins" />
-                <Bar dataKey="losses" fill="#ef4444" name="Losses" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byProp && data.byProp.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data.byProp}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="prop" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="wins" fill="#10b981" name="Wins" />
+                  <Bar dataKey="losses" fill="#ef4444" name="Losses" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No data available</div>
+            )}
           </div>
 
           <div className="chart-card">
             <h2>Daily Profit/Loss</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.overTime}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="profit" fill="#667eea" name="Daily Profit ($)" />
-              </BarChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="profit" fill="#667eea" name="Daily Profit ($)" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No data available</div>
+            )}
           </div>
         </div>
 
@@ -354,8 +383,8 @@ function PerformancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.overTime.slice().reverse().map((day, idx) => (
-                    <tr key={idx}>
+                  {reversedOverTime.map((day, idx) => (
+                    <tr key={`${day.date}-${idx}`}>
                       <td><strong>{day.date}</strong></td>
                       <td>{day.bets || 'N/A'}</td>
                       <td>{day.wins || 'N/A'}</td>
