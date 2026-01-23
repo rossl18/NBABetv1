@@ -107,3 +107,157 @@
   color: #667eea;
   font-weight: bold;
 }
+
+.diagnostics-section {
+  margin-top: 2rem;
+}
+
+.diagnostics-section h2 {
+  color: #333;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.diagnostic-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.diagnostic-description {
+  color: #666;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.diagnostic-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.diagnostic-row:last-child {
+  border-bottom: none;
+}
+
+.diagnostic-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.diagnostic-value {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.diagnostic-value.positive {
+  color: #10b981;
+}
+
+.diagnostic-value.negative {
+  color: #ef4444;
+}
+
+.diagnostic-note {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.calibration-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.calibration-table th {
+  background: #f9fafb;
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.calibration-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #666;
+}
+
+.calibration-table tr:hover {
+  background: #f9fafb;
+}
+
+.calibration-table td.positive {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.calibration-table td.negative {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.calibration-table td.warning {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+/* Calibration status badges */
+.calibration-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.calibration-badge.good {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.calibration-badge.ok {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.calibration-badge.warning {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.calibration-badge.bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Row highlighting for poor calibration */
+.overconfident-row {
+  background: #fef2f2 !important;
+  border-left: 4px solid #ef4444;
+}
+
+.overconfident-row:hover {
+  background: #fee2e2 !important;
+}
+
+.poor-calibration-row {
+  background: #fffbeb !important;
+  border-left: 4px solid #f59e0b;
+}
+
+.poor-calibration-row:hover {
+  background: #fef3c7 !important;
+}

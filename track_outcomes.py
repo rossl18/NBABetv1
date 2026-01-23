@@ -399,14 +399,17 @@ def generate_performance_metrics() -> Dict:
     """
     conn = get_db_connection()
     try:
-        # Get all tracked bets with outcomes
+        # Get all tracked bets with outcomes, including model probabilities
         query = """
         SELECT 
             outcome,
             profit_loss,
             prop,
             game_date,
-            result_date
+            result_date,
+            model_probability,
+            odds,
+            expected_value
         FROM bet_tracking
         WHERE outcome IS NOT NULL
         ORDER BY game_date DESC
@@ -422,7 +425,11 @@ def generate_performance_metrics() -> Dict:
                 "winRate": 0,
                 "totalProfit": 0,
                 "roi": 0,
+                "avgEV": 0,
                 "byProp": [],
+                "byOdds": [],
+                "probCalibration": [],
+                "expectedVsActual": {},
                 "overTime": []
             }
         
@@ -461,6 +468,83 @@ def generate_performance_metrics() -> Dict:
                 "cumulative": round(row['cumulative'], 2)
             })
         
+        # Probability calibration analysis
+        prob_calibration = []
+        if 'model_probability' in df.columns and df['model_probability'].notna().sum() > 0:
+            # Group bets by probability ranges and calculate actual win rates
+            df['prob_bucket'] = pd.cut(df['model_probability'], 
+                                       bins=[0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                       labels=['<50%', '50-60%', '60-70%', '70-80%', '80-90%', '90-100%'])
+            
+            for bucket in df['prob_bucket'].cat.categories:
+                bucket_df = df[df['prob_bucket'] == bucket]
+                if len(bucket_df) > 0:
+                    bucket_wins = bucket_df['outcome'].sum()
+                    bucket_total = len(bucket_df)
+                    actual_win_rate = (bucket_wins / bucket_total) * 100 if bucket_total > 0 else 0
+                    avg_predicted = bucket_df['model_probability'].mean() * 100
+                    
+                    prob_calibration.append({
+                        "range": str(bucket),
+                        "count": int(bucket_total),
+                        "predicted": round(avg_predicted, 1),
+                        "actual": round(actual_win_rate, 1),
+                        "difference": round(avg_predicted - actual_win_rate, 1)
+                    })
+        
+        # Performance by odds range
+        by_odds = []
+        if 'odds' in df.columns and df['odds'].notna().sum() > 0:
+            # Categorize odds: favorites (-), small favorites, small dogs, big dogs
+            def categorize_odds(odds):
+                if pd.isna(odds):
+                    return "Unknown"
+                if odds < -150:
+                    return "Heavy Favorite (<-150)"
+                elif odds < -110:
+                    return "Favorite (-150 to -110)"
+                elif odds <= 110:
+                    return "Pick'em (-110 to +110)"
+                elif odds <= 150:
+                    return "Underdog (+110 to +150)"
+                else:
+                    return "Big Underdog (>+150)"
+            
+            df['odds_category'] = df['odds'].apply(categorize_odds)
+            
+            for category in df['odds_category'].unique():
+                cat_df = df[df['odds_category'] == category]
+                if len(cat_df) > 0:
+                    cat_wins = cat_df['outcome'].sum()
+                    cat_losses = len(cat_df) - cat_wins
+                    cat_profit = cat_df['profit_loss'].sum() if 'profit_loss' in cat_df.columns else 0
+                    cat_win_rate = (cat_wins / len(cat_df)) * 100 if len(cat_df) > 0 else 0
+                    
+                    by_odds.append({
+                        "category": category,
+                        "count": int(len(cat_df)),
+                        "wins": int(cat_wins),
+                        "losses": int(cat_losses),
+                        "winRate": round(cat_win_rate, 1),
+                        "profit": round(cat_profit, 2)
+                    })
+        
+        # Expected vs Actual performance
+        expected_vs_actual = {}
+        if 'model_probability' in df.columns and df['model_probability'].notna().sum() > 0:
+            expected_wins = df['model_probability'].sum()
+            actual_wins = df['outcome'].sum()
+            expected_vs_actual = {
+                "expectedWins": round(expected_wins, 1),
+                "actualWins": int(actual_wins),
+                "difference": round(actual_wins - expected_wins, 1)
+            }
+        
+        # Average EV of bets placed
+        avg_ev = 0
+        if 'expected_value' in df.columns and df['expected_value'].notna().sum() > 0:
+            avg_ev = df['expected_value'].mean()
+        
         return {
             "totalBets": int(len(df)),
             "wins": int(wins),
@@ -468,7 +552,11 @@ def generate_performance_metrics() -> Dict:
             "winRate": round(win_rate, 1),
             "totalProfit": round(total_profit, 2),
             "roi": round(roi, 1),
+            "avgEV": round(avg_ev, 3),
             "byProp": by_prop,
+            "byOdds": by_odds,
+            "probCalibration": prob_calibration,
+            "expectedVsActual": expected_vs_actual,
             "overTime": over_time
         }
         

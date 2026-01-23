@@ -248,30 +248,61 @@ class PropPredictor:
             
             return float(calibrated_proba), float(calibrated_lower), float(calibrated_upper)
     
-    def _calibrate_probability(self, prob: float, compression_factor: float = 0.03) -> float:
+    def _calibrate_probability(self, prob: float, compression_factor: float = 0.05, implied_prob: float = None) -> float:
         """
         Calibrate probability to prevent extreme values (0% or 100%)
-        and account for model uncertainty/noise.
+        and account for model uncertainty/noise. Much more aggressive calibration.
         
         Uses a sigmoid-like compression that pulls probabilities away from extremes.
-        compression_factor: How much to compress (0.03 = 3% compression from edges)
+        Also considers implied probability from odds as a sanity check.
         
         Args:
             prob: Raw probability (0-1)
-            compression_factor: Amount to compress from edges (default 0.03 = 3%)
+            compression_factor: Amount to compress from edges (default 0.05 = 5%)
+            implied_prob: Implied probability from odds (optional, used as sanity check)
         
         Returns:
-            Calibrated probability (compression_factor to 1-compression_factor range)
+            Calibrated probability (much more conservative range)
         """
         # Clamp to valid range first
         prob = max(0.0, min(1.0, prob))
         
-        # Apply compression: map [0,1] to [compression_factor, 1-compression_factor]
-        # This prevents 0% and 100% predictions while keeping most of the signal
-        # 3% compression means 97% max probability, which is more realistic
-        calibrated = compression_factor + prob * (1 - 2 * compression_factor)
+        # MUCH MORE AGGRESSIVE CALIBRATION
+        # Cap maximum probability at 75% (down from 90%)
+        # This prevents overconfidence on high-odds bets
         
-        return calibrated
+        if prob > 0.90:
+            # Map [0.90, 1.0] to [0.65, 0.75] - so 100% becomes 75% max
+            excess = (prob - 0.90) / 0.10  # Normalize to [0, 1]
+            calibrated = 0.65 + excess * 0.10  # Map to [0.65, 0.75]
+        elif prob > 0.75:
+            # Map [0.75, 0.90] to [0.60, 0.65] - compress high probabilities
+            excess = (prob - 0.75) / 0.15  # Normalize to [0, 1]
+            calibrated = 0.60 + excess * 0.05  # Map to [0.60, 0.65]
+        elif prob < 0.10:
+            # Map [0.0, 0.10] to [0.10, 0.20] - so 0% becomes ~10%
+            excess = prob / 0.10  # Normalize to [0, 1]
+            calibrated = 0.10 + excess * 0.10  # Map to [0.10, 0.20]
+        else:
+            # For middle probabilities [0.10, 0.75], compress to [0.20, 0.60]
+            normalized = (prob - 0.10) / 0.65  # Normalize to [0, 1]
+            calibrated = 0.20 + normalized * 0.40  # Map to [0.20, 0.60]
+        
+        # If we have implied probability, use it as a sanity check
+        # If model probability is way off from market, blend them
+        if implied_prob is not None and not np.isnan(implied_prob):
+            implied_prob = max(0.05, min(0.95, implied_prob))  # Clamp implied prob
+            
+            # If calibrated prob is way higher than implied (e.g., 75% vs 40%),
+            # blend them to prevent extreme overconfidence
+            if calibrated > implied_prob + 0.20:  # More than 20% higher
+                # Blend: 60% model, 40% implied (trust market more when model is way off)
+                calibrated = 0.6 * calibrated + 0.4 * implied_prob
+            elif calibrated < implied_prob - 0.20:  # More than 20% lower
+                # Blend: 60% model, 40% implied
+                calibrated = 0.6 * calibrated + 0.4 * implied_prob
+        
+        return max(0.10, min(0.75, calibrated))  # Final clamp to [10%, 75%]
     
     def predict_from_historical(self, historical_df: pd.DataFrame, prop_type: str, feature_prep_func, line: float = None) -> float:
         """

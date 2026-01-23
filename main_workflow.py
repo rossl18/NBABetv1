@@ -70,19 +70,45 @@ def process_prop(row: pd.Series, filter_overs_only: bool = True, min_games: int 
         recent_features = prepare_features_for_prediction(historical_df.iloc[[-1]], prop_type, line=line)
         probability, prob_ci_lower, prob_ci_upper = predictor.predict_probability_with_ci(recent_features)
         
-        # Calculate expected value
-        ev = calculate_expected_value_from_american(probability, odds)
+        # Calculate implied probability from odds FIRST (before final calibration)
         decimal_odds = american_to_decimal(odds)
-        
-        # Calculate EV confidence intervals using probability bounds
-        ev_lower = calculate_expected_value_from_american(prob_ci_lower, odds) if not np.isnan(prob_ci_lower) else np.nan
-        ev_upper = calculate_expected_value_from_american(prob_ci_upper, odds) if not np.isnan(prob_ci_upper) else np.nan
-        
-        # Calculate implied probability from odds
         if not np.isnan(decimal_odds):
             implied_prob = 1 / decimal_odds
         else:
             implied_prob = np.nan
+        
+        # POST-CALIBRATION: Blend with implied probability if model is way off
+        # This prevents assigning 75% probability to a +136 bet (which implies ~42%)
+        if not np.isnan(implied_prob) and not np.isnan(probability):
+            implied_prob = max(0.05, min(0.95, implied_prob))  # Clamp implied prob
+            
+            # If model probability is more than 25% different from implied, blend them
+            # This is a sanity check - the market is usually pretty efficient
+            prob_diff = abs(probability - implied_prob)
+            if prob_diff > 0.25:
+                # The bigger the difference, the more we trust the market
+                # If model says 75% but market says 40%, blend heavily toward market
+                blend_weight = min(0.5, prob_diff * 1.5)  # Up to 50% weight on market
+                probability = (1 - blend_weight) * probability + blend_weight * implied_prob
+                # Also adjust CI bounds proportionally
+                if not np.isnan(prob_ci_lower):
+                    prob_ci_lower = (1 - blend_weight) * prob_ci_lower + blend_weight * max(0.05, implied_prob - 0.10)
+                if not np.isnan(prob_ci_upper):
+                    prob_ci_upper = (1 - blend_weight) * prob_ci_upper + blend_weight * min(0.95, implied_prob + 0.10)
+        
+        # Final clamp to reasonable range [10%, 75%]
+        probability = max(0.10, min(0.75, probability))
+        if not np.isnan(prob_ci_lower):
+            prob_ci_lower = max(0.05, min(0.70, prob_ci_lower))
+        if not np.isnan(prob_ci_upper):
+            prob_ci_upper = max(0.15, min(0.80, prob_ci_upper))
+        
+        # Calculate expected value
+        ev = calculate_expected_value_from_american(probability, odds)
+        
+        # Calculate EV confidence intervals using probability bounds
+        ev_lower = calculate_expected_value_from_american(prob_ci_lower, odds) if not np.isnan(prob_ci_lower) else np.nan
+        ev_upper = calculate_expected_value_from_american(prob_ci_upper, odds) if not np.isnan(prob_ci_upper) else np.nan
         
         # Calculate edge (our probability - implied probability)
         edge = probability - implied_prob if not np.isnan(implied_prob) else np.nan

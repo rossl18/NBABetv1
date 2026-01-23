@@ -24,7 +24,11 @@ function PerformancePage() {
         winRate: 0,
         totalProfit: 0,
         roi: 0,
+        avgEV: 0,
         byProp: [],
+        byOdds: [],
+        probCalibration: [],
+        expectedVsActual: {},
         overTime: []
       })
     } catch (error) {
@@ -37,7 +41,11 @@ function PerformancePage() {
         winRate: 0,
         totalProfit: 0,
         roi: 0,
+        avgEV: 0,
         byProp: [],
+        byOdds: [],
+        probCalibration: [],
+        expectedVsActual: {},
         overTime: []
       })
     } finally {
@@ -113,10 +121,154 @@ function PerformancePage() {
             <div className="stat-label">Win Rate</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{data.roi}%</div>
+            <div className="stat-value">{data.roi >= 0 ? '+' : ''}{data.roi}%</div>
             <div className="stat-label">ROI</div>
           </div>
+          {data.avgEV !== undefined && (
+            <div className="stat-card">
+              <div className="stat-value">{data.avgEV >= 0 ? '+' : ''}{data.avgEV.toFixed(3)}</div>
+              <div className="stat-label">Avg Expected Value</div>
+            </div>
+          )}
         </div>
+
+        {/* Expected vs Actual Performance */}
+        {data.expectedVsActual && Object.keys(data.expectedVsActual).length > 0 && (
+          <div className="diagnostics-section">
+            <h2>Model Calibration</h2>
+            <div className="diagnostic-card">
+              <div className="diagnostic-row">
+                <span className="diagnostic-label">Expected Wins (from probabilities):</span>
+                <span className="diagnostic-value">{data.expectedVsActual.expectedWins}</span>
+              </div>
+              <div className="diagnostic-row">
+                <span className="diagnostic-label">Actual Wins:</span>
+                <span className="diagnostic-value">{data.expectedVsActual.actualWins}</span>
+              </div>
+              <div className="diagnostic-row">
+                <span className="diagnostic-label">Difference:</span>
+                <span className={`diagnostic-value ${data.expectedVsActual.difference >= 0 ? 'positive' : 'negative'}`}>
+                  {data.expectedVsActual.difference >= 0 ? '+' : ''}{data.expectedVsActual.difference}
+                </span>
+              </div>
+              <p className="diagnostic-note">
+                {data.expectedVsActual.difference > 0 
+                  ? 'Model is performing better than expected!' 
+                  : data.expectedVsActual.difference < 0 
+                    ? 'Model is underperforming predictions' 
+                    : 'Model is perfectly calibrated'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Probability Calibration Table */}
+        {data.probCalibration && data.probCalibration.length > 0 && (
+          <div className="diagnostics-section">
+            <h2>Probability Calibration Analysis</h2>
+            <div className="diagnostic-card">
+              <p className="diagnostic-description">
+                This shows how well your model's predicted probabilities match actual outcomes.
+                Ideally, bets predicted at 70% should win ~70% of the time.
+                <strong> Large positive differences indicate overconfidence (model predicted too high).</strong>
+              </p>
+              <table className="calibration-table">
+                <thead>
+                  <tr>
+                    <th>Probability Range</th>
+                    <th>Bets</th>
+                    <th>Avg Predicted</th>
+                    <th>Actual Win Rate</th>
+                    <th>Difference</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.probCalibration.map((cal, idx) => {
+                    // Flag severe overconfidence (predicted > 70% but actual < 50%)
+                    const predicted = parseFloat(cal.predicted);
+                    const actual = parseFloat(cal.actual);
+                    const diff = parseFloat(cal.difference);
+                    const isOverconfident = predicted > 70 && actual < 50;
+                    const isPoor = diff > 15; // More than 15% off
+                    
+                    // Color logic: Large positive differences are BAD (overconfidence) = RED
+                    // Small differences are GOOD (well calibrated) = GREEN
+                    // Large negative differences are also concerning = YELLOW/ORANGE
+                    let diffColorClass = '';
+                    if (Math.abs(diff) < 5) {
+                      diffColorClass = 'positive'; // Well calibrated = green
+                    } else if (diff > 15) {
+                      diffColorClass = 'negative'; // Severe overconfidence = red
+                    } else if (diff < -15) {
+                      diffColorClass = 'warning'; // Severe underconfidence = warning color
+                    } else if (diff > 0) {
+                      diffColorClass = 'negative'; // Moderate overconfidence = red
+                    }
+                    
+                    return (
+                      <tr key={idx} className={isOverconfident ? 'overconfident-row' : isPoor ? 'poor-calibration-row' : ''}>
+                        <td><strong>{cal.range}</strong></td>
+                        <td>{cal.count}</td>
+                        <td>{cal.predicted}%</td>
+                        <td>{cal.actual}%</td>
+                        <td className={diffColorClass}>
+                          {diff >= 0 ? '+' : ''}{cal.difference}%
+                        </td>
+                        <td>
+                          {isOverconfident ? (
+                            <span className="calibration-badge bad">⚠️ Overconfident</span>
+                          ) : isPoor ? (
+                            <span className="calibration-badge warning">⚠️ Poor Calibration</span>
+                          ) : Math.abs(diff) < 5 ? (
+                            <span className="calibration-badge good">✓ Well Calibrated</span>
+                          ) : (
+                            <span className="calibration-badge ok">~ Acceptable</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Performance by Odds Range */}
+        {data.byOdds && data.byOdds.length > 0 && (
+          <div className="diagnostics-section">
+            <h2>Performance by Odds Range</h2>
+            <div className="diagnostic-card">
+              <table className="calibration-table">
+                <thead>
+                  <tr>
+                    <th>Odds Category</th>
+                    <th>Bets</th>
+                    <th>Wins</th>
+                    <th>Losses</th>
+                    <th>Win Rate</th>
+                    <th>Profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.byOdds.map((odds, idx) => (
+                    <tr key={idx}>
+                      <td>{odds.category}</td>
+                      <td>{odds.count}</td>
+                      <td>{odds.wins}</td>
+                      <td>{odds.losses}</td>
+                      <td>{odds.winRate}%</td>
+                      <td className={odds.profit >= 0 ? 'positive' : 'negative'}>
+                        ${odds.profit >= 0 ? '+' : ''}{odds.profit.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="charts-section">
           <div className="chart-card">
