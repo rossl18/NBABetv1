@@ -5,10 +5,12 @@
 }
 
 .about-page .container {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   border-radius: 20px;
   padding: 2rem 3rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  backdrop-filter: blur(10px);
 }
 
 .about-page h1 {
@@ -44,9 +46,11 @@
 .pipeline-step {
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 12px;
+  background: rgba(249, 250, 251, 0.8);
+  border-radius: 14px;
   border-left: 4px solid #667eea;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(229, 231, 235, 0.5);
 }
 
 .pipeline-step h3 {
@@ -69,10 +73,12 @@
 
 .tech-item {
   padding: 1rem;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: rgba(249, 250, 251, 0.8);
+  border-radius: 10px;
   color: #555;
   font-size: 0.95rem;
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  backdrop-filter: blur(8px);
 }
 
 .tech-item strong {
@@ -89,17 +95,78 @@
 .notes-list li {
   padding: 1rem;
   margin-bottom: 1rem;
-  background: #fff7ed;
+  background: rgba(255, 247, 237, 0.8);
   border-left: 4px solid #f59e0b;
-  border-radius: 8px;
+  border-radius: 10px;
   color: #555;
   line-height: 1.7;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  backdrop-filter: blur(8px);
 }
 
 .notes-list li strong {
   color: #92400e;
   display: block;
   margin-bottom: 0.5rem;
+}
+
+.technical-details {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.technical-details li {
+  padding: 0.75rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: #555;
+  line-height: 1.7;
+}
+
+.technical-details li:before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #667eea;
+  font-weight: bold;
+}
+
+.technical-details li strong {
+  color: #333;
+}
+
+.technical-details ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.technical-details ul {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.technical-details code {
+  background: #f3f4f6;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #667eea;
+}
+
+.formula {
+  background: #f9fafb;
+  padding: 1rem;
+  border-left: 4px solid #667eea;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  text-align: center;
+  margin: 1rem 0;
+  color: #333;
 }
 
 @media (max-width: 768px) {
