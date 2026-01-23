@@ -66,17 +66,24 @@ def find_stat_column(df: pd.DataFrame, prop_type: str) -> Optional[str]:
             return matching_cols[0]
     return None
 
-def get_actual_stat_from_api(player_name: str, prop_type: str, game_date: date) -> Optional[float]:
+def get_actual_stat_from_api(player_name: str, prop_type: str, game_date: date, max_retries: int = 2) -> Optional[float]:
     """
     Query NBA API using nba_api package to get actual stat value for a player on a specific game date
     This is used for current season games not in the training dataset
     
+    Args:
+        player_name: Player name
+        prop_type: Type of prop
+        game_date: Game date
+        max_retries: Maximum number of retry attempts (default: 2)
+    
     Returns:
-        Actual stat value, or None if not found
+        Actual stat value, or None if not found or if API times out
     """
     try:
         from nba_api.stats.endpoints import playergamelog
         from nba_api.stats.static import players
+        from requests.exceptions import ReadTimeout, Timeout, ConnectionError as RequestsConnectionError
         import time
         
         # Find player ID by name using nba_api static players list
@@ -125,63 +132,89 @@ def get_actual_stat_from_api(player_name: str, prop_type: str, game_date: date) 
         
         print(f"  API: Fetching game log for season {season}, date {game_date}")
         
-        # Get game log for the player
-        game_log = playergamelog.PlayerGameLog(
-            player_id=player_id,
-            season=season
-        )
+        # Retry logic with exponential backoff
+        for attempt in range(max_retries + 1):
+            try:
+                # Get game log for the player with timeout handling
+                # nba_api doesn't expose timeout directly, but we can catch the exception
+                game_log = playergamelog.PlayerGameLog(
+                    player_id=player_id,
+                    season=season
+                )
+                
+                # Delay before processing to avoid rate limiting (longer delay on retries)
+                delay = 1.0 + (attempt * 0.5)  # 1.0s, 1.5s, 2.0s
+                time.sleep(delay)
+                
+                df = game_log.get_data_frames()[0]
+                
+                if len(df) == 0:
+                    print(f"  API: No games found for {matched_name} in season {season}")
+                    return None
+                
+                # Filter to the specific date
+                # nba_api returns dates in format "MMM DD, YYYY" (e.g., "Jan 21, 2026")
+                df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'], format='%b %d, %Y', errors='coerce')
+                game_row = df[df['GAME_DATE'].dt.date == game_date]
+                
+                if len(game_row) == 0:
+                    print(f"  API: No game found for {matched_name} on {game_date}")
+                    return None
+                
+                # Map prop types to stat columns in nba_api
+                prop_to_stat_field = {
+                    'Points': 'PTS',
+                    'Rebounds': 'REB',
+                    'Assists': 'AST',
+                    'Threes': 'FG3M',  # 3-pointers made
+                    'Made Threes': 'FG3M',
+                    'Steals': 'STL',
+                    'Blocks': 'BLK'
+                }
+                
+                stat_field = prop_to_stat_field.get(prop_type)
+                if stat_field and stat_field in game_row.columns:
+                    value = float(game_row[stat_field].iloc[0])
+                    print(f"  API: Found {prop_type} = {value} for {matched_name} on {game_date}")
+                    return value
+                else:
+                    print(f"  API: Stat field '{stat_field}' not found in response for {prop_type}")
+                    return None
+                    
+            except (ReadTimeout, Timeout, RequestsConnectionError) as e:
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    print(f"  API: Timeout on attempt {attempt + 1}/{max_retries + 1}, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"  API: Timeout after {max_retries + 1} attempts for {player_name} on {game_date}")
+                    return None
+            except Exception as e:
+                # For other exceptions, don't retry
+                print(f"  API Error for {player_name} on {game_date}: {type(e).__name__}: {str(e)[:100]}")
+                return None
         
-        # Small delay to avoid rate limiting
-        time.sleep(0.6)
-        
-        df = game_log.get_data_frames()[0]
-        
-        if len(df) == 0:
-            print(f"  API: No games found for {matched_name} in season {season}")
-            return None
-        
-        # Filter to the specific date
-        # nba_api returns dates in format "MMM DD, YYYY" (e.g., "Jan 21, 2026")
-        df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'], format='%b %d, %Y', errors='coerce')
-        game_row = df[df['GAME_DATE'].dt.date == game_date]
-        
-        if len(game_row) == 0:
-            print(f"  API: No game found for {matched_name} on {game_date}")
-            return None
-        
-        # Map prop types to stat columns in nba_api
-        prop_to_stat_field = {
-            'Points': 'PTS',
-            'Rebounds': 'REB',
-            'Assists': 'AST',
-            'Threes': 'FG3M',  # 3-pointers made
-            'Made Threes': 'FG3M',
-            'Steals': 'STL',
-            'Blocks': 'BLK'
-        }
-        
-        stat_field = prop_to_stat_field.get(prop_type)
-        if stat_field and stat_field in game_row.columns:
-            value = float(game_row[stat_field].iloc[0])
-            print(f"  API: Found {prop_type} = {value} for {matched_name} on {game_date}")
-            return value
-        else:
-            print(f"  API: Stat field '{stat_field}' not found in response for {prop_type}")
-            return None
+        return None
         
     except ImportError:
         print(f"  API: nba_api package not installed. Install with: pip install nba-api")
         return None
     except Exception as e:
-        print(f"  API Error for {player_name} on {game_date}: {e}")
-        import traceback
-        traceback.print_exc()
+        # Catch-all for any other unexpected errors
+        print(f"  API: Unexpected error for {player_name} on {game_date}: {type(e).__name__}: {str(e)[:100]}")
         return None
 
-def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Optional[float]:
+def get_actual_stat(player_name: str, prop_type: str, game_date: date, use_api: bool = True) -> Optional[float]:
     """
     Get the actual stat value for a player on a specific game date
     First checks the historical training dataset, then falls back to NBA API for current season
+    
+    Args:
+        player_name: Player name
+        prop_type: Type of prop
+        game_date: Game date
+        use_api: Whether to use API if not found in database (default: True)
     
     Returns:
         Actual stat value, or None if not found
@@ -210,18 +243,19 @@ def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Option
     finally:
         conn.close()
     
-    # If not found in training dataset, try NBA API (for current season games)
+    # If not found in training dataset and API is enabled, try NBA API (for current season games)
     # Only try API if the date is recent (within last 2 years)
-    from datetime import timedelta
-    two_years_ago = date.today() - timedelta(days=730)
-    print(f"  [get_actual_stat] Not in training dataset. Date check: {game_date} >= {two_years_ago} = {game_date >= two_years_ago}")
-    if game_date >= two_years_ago:
-        print(f"  [get_actual_stat] Trying NBA API for {player_name} on {game_date}...")
-        result = get_actual_stat_from_api(player_name, prop_type, game_date)
-        print(f"  [get_actual_stat] API returned: {result}")
-        return result
-    else:
-        print(f"  [get_actual_stat] Date {game_date} is too old for API lookup")
+    if use_api:
+        from datetime import timedelta
+        two_years_ago = date.today() - timedelta(days=730)
+        print(f"  [get_actual_stat] Not in training dataset. Date check: {game_date} >= {two_years_ago} = {game_date >= two_years_ago}")
+        if game_date >= two_years_ago:
+            print(f"  [get_actual_stat] Trying NBA API for {player_name} on {game_date}...")
+            result = get_actual_stat_from_api(player_name, prop_type, game_date)
+            print(f"  [get_actual_stat] API returned: {result}")
+            return result
+        else:
+            print(f"  [get_actual_stat] Date {game_date} is too old for API lookup")
     
     return None
 
@@ -392,8 +426,11 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
         
         processed = 0
         not_found = 0
+        api_timeouts = 0
+        max_api_calls = 50  # Limit API calls to avoid overwhelming the service
+        api_call_count = 0
         
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             prop_id = row['id']
             player = row['player']
             prop = row['prop']
@@ -404,11 +441,33 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
             
             # Get actual stat
             print(f"Looking up: {player} - {prop} on {game_date}")
-            actual_stat = get_actual_stat(player, prop, game_date)
+            
+            # Check if we need to use API (and if we've hit the limit)
+            from datetime import timedelta
+            two_years_ago = date.today() - timedelta(days=730)
+            needs_api = game_date >= two_years_ago and api_call_count < max_api_calls
+            
+            if not needs_api and game_date >= two_years_ago:
+                # We've hit the API limit, skip API lookups
+                print(f"⚠ Skipping API lookup (limit reached: {api_call_count}/{max_api_calls})")
+                actual_stat = get_actual_stat(player, prop, game_date, use_api=False)
+            else:
+                actual_stat = get_actual_stat(player, prop, game_date, use_api=needs_api)
+            
+            # Track API usage and add delays
+            if needs_api and game_date >= two_years_ago:
+                api_call_count += 1
+                # Add delay between API calls to avoid rate limiting
+                if api_call_count < max_api_calls:
+                    import time
+                    time.sleep(1.5)  # 1.5 second delay between API calls
             
             if actual_stat is None:
+                # Check if it was a timeout (we can't easily distinguish, but we'll track)
                 print(f"❌ Could not find actual stat for {player} - {prop} on {game_date}")
                 not_found += 1
+                if needs_api:
+                    api_timeouts += 1
                 continue
             
             # Determine outcome (handles pushes/ties)
@@ -428,6 +487,9 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
         
         print(f"\nProcessed: {processed}")
         print(f"Not found: {not_found}")
+        if api_call_count > 0:
+            print(f"API calls made: {api_call_count}/{max_api_calls}")
+            print(f"API timeouts: {api_timeouts}")
         
     except Exception as e:
         print(f"Error processing past props: {e}")
