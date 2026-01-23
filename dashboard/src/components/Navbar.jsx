@@ -9,20 +9,26 @@ function Navbar() {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-brand">
-          NBA Betting Dashboard
+          RLBet
         </Link>
         <div className="navbar-links">
           <Link 
             to="/" 
             className={location.pathname === '/' ? 'active' : ''}
           >
-            Best Bets
+            Today's Bets
           </Link>
           <Link 
             to="/performance" 
             className={location.pathname === '/performance' ? 'active' : ''}
           >
             Performance
+          </Link>
+          <Link 
+            to="/about" 
+            className={location.pathname === '/about' ? 'active' : ''}
+          >
+            About
           </Link>
         </div>
       </div>

@@ -153,7 +153,7 @@ function BetsPage() {
         {showSpinner && <LoadingSpinner />}
         <div className="page-header">
           <div>
-            <h1>Best Bets</h1>
+            <h1>Today's Bets</h1>
             {loading && <p style={{color: '#666', fontSize: '0.9rem'}}>Loading...</p>}
             <p className="props-count">Showing {filteredBets.length} of {bets.length} props</p>
           </div>
