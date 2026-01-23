@@ -25,6 +25,12 @@ function Navbar() {
             Performance
           </Link>
           <Link 
+            to="/parlay" 
+            className={location.pathname === '/parlay' ? 'active' : ''}
+          >
+            Parlay Builder
+          </Link>
+          <Link 
             to="/about" 
             className={location.pathname === '/about' ? 'active' : ''}
           >

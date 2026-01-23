@@ -138,10 +138,15 @@ function BetsPage() {
     total: bets.length,
     positiveEV: bets.filter(b => b.expected_value > 0).length,
     highValue: bets.filter(b => b.expected_value > 0.10).length,
+    suggested: bets.filter(b => b.expected_value > 0.50).length, // EV > 50%
     avgEV: bets.length > 0 
       ? (bets.reduce((sum, b) => sum + (b.expected_value || 0), 0) / bets.length).toFixed(3)
       : 0
   }
+
+  // Suggested bets: Only bets with EV > 50% (0.50)
+  const suggestedBets = bets.filter(bet => (bet.expected_value || 0) > 0.50)
+    .sort((a, b) => (b.expected_value || 0) - (a.expected_value || 0))
 
   // Never block the UI - always show content, just indicate loading state
   // Show spinner only if we have no data AND are loading
@@ -182,11 +187,36 @@ function BetsPage() {
             <div className="stat-value">{stats.highValue}</div>
             <div className="stat-label">High Value (10%+)</div>
           </div>
+          <div className="stat-card" style={{borderLeft: '4px solid #667eea'}}>
+            <div className="stat-value">{stats.suggested}</div>
+            <div className="stat-label">Suggested (50%+ EV)</div>
+          </div>
           <div className="stat-card">
             <div className="stat-value">{stats.avgEV > 0 ? `+${stats.avgEV}` : stats.avgEV}%</div>
             <div className="stat-label">Average EV</div>
           </div>
         </div>
+
+        {/* Suggested Bets Section */}
+        {suggestedBets.length > 0 && (
+          <div className="suggested-bets-section">
+            <h2 style={{marginTop: '2rem', marginBottom: '1rem', color: '#333', fontSize: '1.5rem'}}>
+              ⭐ Suggested Bets (EV &gt; 50%)
+            </h2>
+            <p style={{color: '#666', marginBottom: '1.5rem', fontSize: '0.95rem'}}>
+              These bets have exceptional expected value. Only showing bets with EV greater than 50%.
+            </p>
+            <div className="bets-grid">
+              {suggestedBets.map((bet, index) => (
+                <BetCard key={`suggested-${index}`} bet={bet} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <h2 style={{marginTop: '2rem', marginBottom: '1rem', color: '#333', fontSize: '1.5rem'}}>
+          All Bets
+        </h2>
 
         <div className="controls">
           <div className="filter-group">

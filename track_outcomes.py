@@ -8,6 +8,16 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Dict
 import json
 import os
+import sys
+
+# Fix Unicode encoding for Windows console
+if sys.platform == 'win32':
+    try:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except:
+        pass
 
 # Database connection string - use environment variable if set, otherwise use default
 DB_CONNECTION_STRING = os.getenv(
@@ -205,17 +215,31 @@ def get_actual_stat(player_name: str, prop_type: str, game_date: date) -> Option
     
     return None
 
-def determine_outcome(actual_stat: float, line: float, over_under: str) -> bool:
+def determine_outcome(actual_stat: float, line: float, over_under: str) -> Optional[bool]:
     """
     Determine if a prop hit based on actual stat, line, and over/under
     
+    Handles ties (pushes) explicitly:
+    - Over: actual > line (win), actual == line (push/None), actual < line (loss)
+    - Under: actual < line (win), actual == line (push/None), actual > line (loss)
+    
     Returns:
-        True if prop hit, False if not
+        True if prop hit, False if prop lost, None if push (tie)
     """
     if over_under == 'Over':
-        return actual_stat > line
+        if actual_stat > line:
+            return True
+        elif actual_stat < line:
+            return False
+        else:  # actual_stat == line (push)
+            return None
     elif over_under == 'Under':
-        return actual_stat < line
+        if actual_stat < line:
+            return True
+        elif actual_stat > line:
+            return False
+        else:  # actual_stat == line (push)
+            return None
     else:
         raise ValueError(f"over_under must be 'Over' or 'Under', got: {over_under}")
 
@@ -329,24 +353,30 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
         
         today = date.today()
         
-        # Get props that were GENERATED on start_date (yesterday), not today
-        # We want to track outcomes for props that were generated yesterday to verify their predictions
-        # Use generated_at date to find props from yesterday, then use that date to look up actual stats
+        # Only track games that have already occurred (game_date < today, not <= today)
+        # Games from today haven't finished yet, so we can't track them
+        end_date = today - timedelta(days=1)  # Only track up to yesterday
+        
+        # Get props with game_date between start_date and end_date (yesterday) that have already occurred
+        # Props generated today are for today's games, so we track outcomes for yesterday's games
+        # Use game_date (not generated_at) to find props for games that have already happened
         query = """
         SELECT pp.id, pp.player, pp.prop, pp.line, pp.over_under, pp.odds, 
-               DATE(pp.generated_at) as generated_date,
-               DATE(pp.generated_at) as game_date
+               pp.game_date,
+               DATE(pp.generated_at) as generated_date
         FROM processed_props pp
         LEFT JOIN bet_tracking bt ON pp.id = bt.prop_id
-        WHERE DATE(pp.generated_at) = %s
+        WHERE pp.game_date IS NOT NULL
+        AND pp.game_date >= %s
+        AND pp.game_date <= %s
         AND (bt.outcome IS NULL OR bt.id IS NULL)
-        ORDER BY DATE(pp.generated_at) DESC
+        ORDER BY pp.game_date DESC, pp.generated_at DESC
         """
         
-        # Only look for props generated on start_date (yesterday), not today
-        # This ensures we're tracking yesterday's predictions and verifying them against yesterday's actual stats
-        print(f"Looking for props generated on {start_date} (yesterday)...")
-        df = pd.read_sql_query(query, conn, params=[start_date])
+        # Look for props with game_date >= start_date and <= end_date (yesterday) that have already occurred
+        # This ensures we're tracking outcomes for yesterday's games and any missed days
+        print(f"Looking for props with game_date >= {start_date} and game_date <= {end_date} (past games only)...")
+        df = pd.read_sql_query(query, conn, params=[start_date, end_date])
         
         print(f"Found {len(df)} props to process")
         
@@ -371,8 +401,13 @@ def process_past_props(start_date: Optional[date] = None, days_back: Optional[in
                 not_found += 1
                 continue
             
-            # Determine outcome
+            # Determine outcome (handles pushes/ties)
             outcome = determine_outcome(actual_stat, line, over_under)
+            
+            # Skip pushes (ties) - don't track them as wins or losses
+            if outcome is None:
+                print(f"⚪ PUSH: {player} {prop} {over_under} {line} | Actual: {actual_stat} | Line: {line} (tie - not tracked)")
+                continue
             
             # Update bet_tracking
             update_bet_tracking(prop_id, outcome, actual_stat, game_date, odds)
@@ -457,16 +492,28 @@ def generate_performance_metrics() -> Dict:
                 "profit": round(prop_profit, 2)
             })
         
-        # Cumulative profit over time
-        df_sorted = df.sort_values('game_date')
-        df_sorted['cumulative'] = df_sorted['profit_loss'].cumsum() if 'profit_loss' in df_sorted.columns else 0
-        
+        # Cumulative profit over time and win rate by day
         over_time = []
-        for _, row in df_sorted.iterrows():
-            over_time.append({
-                "date": row['game_date'].strftime('%Y-%m-%d'),
-                "cumulative": round(row['cumulative'], 2)
-            })
+        if 'game_date' in df.columns and df['game_date'].notna().sum() > 0:
+            # Group by date and calculate daily stats
+            daily_stats = df.groupby('game_date').agg({
+                'outcome': ['sum', 'count'],
+                'profit_loss': 'sum'
+            }).reset_index()
+            daily_stats.columns = ['game_date', 'wins', 'total', 'profit']
+            daily_stats['win_rate'] = (daily_stats['wins'] / daily_stats['total'] * 100).round(1)
+            daily_stats = daily_stats.sort_values('game_date')
+            daily_stats['cumulative'] = daily_stats['profit'].cumsum()
+            
+            for _, row in daily_stats.iterrows():
+                over_time.append({
+                    "date": row['game_date'].strftime('%Y-%m-%d'),
+                    "cumulative": round(row['cumulative'], 2),
+                    "winRate": row['win_rate'],
+                    "bets": int(row['total']),
+                    "wins": int(row['wins']),
+                    "profit": round(row['profit'], 2)
+                })
         
         # Probability calibration analysis
         prob_calibration = []
@@ -582,19 +629,31 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Tracking Bet Outcomes")
     print("=" * 60)
-    print("\nNOTE: This script only processes props that:")
+    print("\nNOTE: This script processes props that:")
     print("  - Have game_date set (NOT NULL)")
-    print("  - Have game_date >= today")
     print("  - Have game_date <= today (game has already occurred)")
     print("  - Haven't been tracked yet")
-    print("\nTo track historical props, use: process_past_props(days_back=N)")
+    print("\nUsage:")
+    print("  python track_outcomes.py           # Track yesterday's games")
+    print("  python track_outcomes.py 2        # Track last 2 days")
+    print("  python track_outcomes.py 7        # Track last 7 days")
     print("=" * 60)
     
-    # Process props from today onward (no historical backfill)
+    # Default: track yesterday's games (most common use case)
+    days_back = 1
+    if len(sys.argv) > 1:
+        try:
+            days_back = int(sys.argv[1])
+        except ValueError:
+            print(f"⚠ Invalid argument '{sys.argv[1]}', using default: 1 day")
+    
+    start_date = date.today() - timedelta(days=days_back)
+    
+    # Process props from start_date onward
     # Only processes games that have already happened (game_date <= today)
-    print("\n1. Processing props from today onward...")
-    print(f"   Looking for props with game_date >= {date.today()} that have already occurred")
-    process_past_props(start_date=date.today())  # Only from today forward
+    print(f"\n1. Processing props from {start_date} to {date.today()}...")
+    print(f"   Looking for props with game_date >= {start_date} that have already occurred")
+    process_past_props(start_date=start_date)
     
     print("\n2. Generating performance metrics...")
     metrics = generate_performance_metrics()

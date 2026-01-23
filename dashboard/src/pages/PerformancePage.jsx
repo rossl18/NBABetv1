@@ -280,7 +280,26 @@ function PerformancePage() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="cumulative" stroke="#667eea" strokeWidth={2} />
+                <Line type="monotone" dataKey="cumulative" stroke="#667eea" strokeWidth={2} name="Cumulative Profit ($)" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="chart-card">
+            <h2>Win Rate by Day</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.overTime}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip 
+                  formatter={(value, name) => {
+                    if (name === 'winRate') return [`${value}%`, 'Win Rate'];
+                    return [value, name];
+                  }}
+                />
+                <Legend />
+                <Line type="monotone" dataKey="winRate" stroke="#10b981" strokeWidth={2} name="Win Rate (%)" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -294,12 +313,68 @@ function PerformancePage() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="wins" fill="#10b981" />
-                <Bar dataKey="losses" fill="#ef4444" />
+                <Bar dataKey="wins" fill="#10b981" name="Wins" />
+                <Bar dataKey="losses" fill="#ef4444" name="Losses" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="chart-card">
+            <h2>Daily Profit/Loss</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.overTime}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="profit" fill="#667eea" name="Daily Profit ($)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* Additional Diagnostics */}
+        {data.overTime && data.overTime.length > 0 && (
+          <div className="diagnostics-section">
+            <h2>Daily Performance Summary</h2>
+            <div className="diagnostic-card">
+              <p className="diagnostic-description">
+                Breakdown of performance metrics by day, showing win rate, number of bets, and daily profit.
+              </p>
+              <table className="calibration-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Bets</th>
+                    <th>Wins</th>
+                    <th>Win Rate</th>
+                    <th>Daily Profit</th>
+                    <th>Cumulative Profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.overTime.slice().reverse().map((day, idx) => (
+                    <tr key={idx}>
+                      <td><strong>{day.date}</strong></td>
+                      <td>{day.bets || 'N/A'}</td>
+                      <td>{day.wins || 'N/A'}</td>
+                      <td className={day.winRate >= 50 ? 'positive' : 'negative'}>
+                        {day.winRate ? `${day.winRate}%` : 'N/A'}
+                      </td>
+                      <td className={day.profit >= 0 ? 'positive' : 'negative'}>
+                        ${day.profit >= 0 ? '+' : ''}{day.profit ? day.profit.toFixed(2) : '0.00'}
+                      </td>
+                      <td className={day.cumulative >= 0 ? 'positive' : 'negative'}>
+                        ${day.cumulative >= 0 ? '+' : ''}{day.cumulative.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

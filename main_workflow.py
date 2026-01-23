@@ -103,12 +103,12 @@ def process_prop(row: pd.Series, filter_overs_only: bool = True, min_games: int 
         if not np.isnan(prob_ci_upper):
             prob_ci_upper = max(0.15, min(0.80, prob_ci_upper))
         
-        # Calculate expected value
-        ev = calculate_expected_value_from_american(probability, odds)
+        # Calculate expected value (now accounts for market efficiency)
+        ev = calculate_expected_value_from_american(probability, odds, implied_prob)
         
         # Calculate EV confidence intervals using probability bounds
-        ev_lower = calculate_expected_value_from_american(prob_ci_lower, odds) if not np.isnan(prob_ci_lower) else np.nan
-        ev_upper = calculate_expected_value_from_american(prob_ci_upper, odds) if not np.isnan(prob_ci_upper) else np.nan
+        ev_lower = calculate_expected_value_from_american(prob_ci_lower, odds, implied_prob) if not np.isnan(prob_ci_lower) else np.nan
+        ev_upper = calculate_expected_value_from_american(prob_ci_upper, odds, implied_prob) if not np.isnan(prob_ci_upper) else np.nan
         
         # Calculate edge (our probability - implied probability)
         edge = probability - implied_prob if not np.isnan(implied_prob) else np.nan

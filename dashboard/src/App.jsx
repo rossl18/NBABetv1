@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import BetsPage from './pages/BetsPage'
 import PerformancePage from './pages/PerformancePage'
 import AboutPage from './pages/AboutPage'
+import ParlayPage from './pages/ParlayPage'
 import Navbar from './components/Navbar'
 import './App.css'
 
@@ -21,6 +22,7 @@ function App() {
           <Route path="/" element={<BetsPage />} />
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/parlay" element={<ParlayPage />} />
         </Routes>
       </div>
     </BrowserRouter>

@@ -72,11 +72,11 @@ def export_for_dashboard():
             print("\n[Step 3/3] Tracking outcomes and generating performance metrics...")
             if db_conn:
                 try:
-                    # Process props generated yesterday (to verify yesterday's predictions)
-                    # This will find props with generated_at = yesterday and track their outcomes
+                    # Process props from yesterday's games (to verify yesterday's predictions)
+                    # This will find props with game_date = yesterday and track their outcomes
                     from datetime import timedelta
                     yesterday = date.today() - timedelta(days=1)
-                    print(f"Tracking outcomes for props generated on {yesterday}...")
+                    print(f"Tracking outcomes for props with game_date = {yesterday} (yesterday's games)...")
                     process_past_props(start_date=yesterday)
                     # Export performance JSON
                     export_performance_json()
