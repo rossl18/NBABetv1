@@ -2,7 +2,9 @@ name: Daily Bet Update
 
 on:
   schedule:
-    # Run daily at 8 AM EST (1 PM UTC)
+    # Run daily at 8 AM EST/EDT (1 PM UTC during EST, 12 PM UTC during EDT)
+    # Using 13:00 UTC to cover both EST and EDT (will be 8 AM EST or 9 AM EDT)
+    # Note: GitHub Actions uses UTC timezone
     - cron: '0 13 * * *'
   workflow_dispatch:  # Allow manual trigger
   push:
@@ -36,7 +38,8 @@ jobs:
       env:
         DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
       run: |
-        python export_to_json.py
+        python export_to_json.py || exit 1
+      continue-on-error: false
     
     - name: Set up Node.js
       uses: actions/setup-node@v4

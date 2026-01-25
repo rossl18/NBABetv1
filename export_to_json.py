@@ -82,12 +82,14 @@ def export_for_dashboard():
             print("\n[Step 3/3] Tracking outcomes and generating performance metrics...")
             if db_conn:
                 try:
-                    # Process props from yesterday's games (to verify yesterday's predictions)
-                    # This will find props with game_date = yesterday and track their outcomes
+                    # Process props from the last 7 days to catch any missed games
+                    # This ensures we don't miss games if the workflow didn't run for a few days
                     from datetime import timedelta
-                    yesterday = date.today() - timedelta(days=1)
-                    print(f"Tracking outcomes for props with game_date = {yesterday} (yesterday's games)...")
-                    process_past_props(start_date=yesterday)
+                    days_back = 7  # Look back 7 days to catch any missed games
+                    start_date = date.today() - timedelta(days=days_back)
+                    print(f"Tracking outcomes for props with game_date >= {start_date} (last {days_back} days)...")
+                    print(f"  This will process all untracked games from the past {days_back} days")
+                    process_past_props(start_date=start_date)
                     # Export performance JSON
                     export_performance_json()
                     print("✓ Performance metrics updated")
